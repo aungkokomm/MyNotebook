@@ -32,8 +32,9 @@ Because the popular ones each ask you to give something up:
   in a folder you control.
 - **Obsidian / Notion** are Electron apps that feel heavy on Windows. This is a **native WinUI 3 app**
   — it starts fast and stays light.
-- **Apple Notes / OneNote** treat a pasted screenshot as a dumb picture. Here, **every screenshot is
-  OCR-indexed**, so you can search the *text inside* your images months later.
+- **OneNote and Apple Notes** can search text in images too — but OneNote leans on the Microsoft cloud
+  and account, and Apple's Live Text is locked to the Apple ecosystem. My Notebook OCR-indexes every
+  screenshot **fully offline, no account**, in a screenshot-thread workflow built for Windows.
 - **Almost none of them search Myanmar properly.** Myanmar text has no spaces between words, so normal
   full-text search misses it. My Notebook pairs a trigram index with full-text search so it finds a
   word **in the middle of a Myanmar sentence** — and partial words in any language.
