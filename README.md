@@ -67,6 +67,7 @@ If you want a notebook that is **fast, private, genuinely yours, and actually fi
 | 📤 **Export** | PDF, Word `.docx`, self-contained HTML ("publish as a web page"), print |
 | 🔊 **Voice** | Read a note aloud (TTS) and record audio into a note |
 | 🕘 **Safety** | Automatic version history with restore, soft-delete trash, `.zip` backup |
+| 🕓 **Timeline** | Browse every note by date — grouped into Today/Yesterday/this month/older, with zoom-out to jump between periods |
 | ⚡ **Polish** | Focus mode, pin/tag/move, close-to-tray, global Quick Note hotkey, settings window |
 
 ## 🖼️ Screenshots

@@ -62,6 +62,9 @@ public interface INoteService
     void SoftDeleteNote(long noteId);
     IReadOnlyList<Note> ListNotes(long? folderId = null, bool includeDeleted = false);
 
+    /// <summary>All non-deleted notes ordered for the Timeline by the given axis, newest first.</summary>
+    IReadOnlyList<Note> ListTimeline(TimelineAxis axis = TimelineAxis.Modified);
+
     // Images (screenshot thread cards)
     ImageItem AddImage(long noteId, string relPath, int width, int height,
                        string ocrText = "", string caption = "");

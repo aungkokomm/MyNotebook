@@ -36,7 +36,7 @@ public class SchemaTests
     public void Initialize_sets_schema_version_to_current()
     {
         using var fx = new NotebookFixture();
-        Assert.Equal(3, fx.Storage.SchemaVersion);
+        Assert.Equal(4, fx.Storage.SchemaVersion);
     }
 
     [Fact]
@@ -44,7 +44,56 @@ public class SchemaTests
     {
         using var fx = new NotebookFixture();
         fx.Storage.Initialize(); // second call must not throw or duplicate
-        Assert.Equal(3, fx.Storage.SchemaVersion);
+        Assert.Equal(4, fx.Storage.SchemaVersion);
+    }
+}
+
+public class TimelineTests
+{
+    [Fact]
+    public void Timeline_excludes_deleted_and_returns_live_notes()
+    {
+        using var fx = new NotebookFixture();
+        var a = fx.Notes.CreateNote("A");
+        var b = fx.Notes.CreateNote("B");
+        fx.Notes.SoftDeleteNote(b.Id);
+
+        var tl = fx.Notes.ListTimeline();
+        Assert.Contains(tl, x => x.Id == a.Id);
+        Assert.DoesNotContain(tl, x => x.Id == b.Id);
+    }
+
+    [Fact]
+    public void Timeline_modified_axis_orders_by_last_edit_desc()
+    {
+        using var fx = new NotebookFixture();
+        var a = fx.Notes.CreateNote("A");
+        Thread.Sleep(8);
+        fx.Notes.CreateNote("B");
+        Thread.Sleep(8);
+        fx.Notes.CreateNote("C");
+        Thread.Sleep(8);
+        a.BodyPlain = "touched"; fx.Notes.UpdateNote(a);   // edit A last
+
+        var tl = fx.Notes.ListTimeline(TimelineAxis.Modified);
+        Assert.Equal(a.Id, tl[0].Id);                      // most recently edited first
+    }
+
+    [Fact]
+    public void Timeline_created_axis_ignores_later_edits()
+    {
+        using var fx = new NotebookFixture();
+        var a = fx.Notes.CreateNote("A");
+        Thread.Sleep(8);
+        fx.Notes.CreateNote("B");
+        Thread.Sleep(8);
+        var c = fx.Notes.CreateNote("C");
+        Thread.Sleep(8);
+        a.BodyPlain = "touched"; fx.Notes.UpdateNote(a);   // editing A must not reorder
+
+        var tl = fx.Notes.ListTimeline(TimelineAxis.Created);
+        Assert.Equal(c.Id, tl[0].Id);                      // newest creation first
+        Assert.Equal(a.Id, tl[^1].Id);                     // oldest creation last
     }
 }
 

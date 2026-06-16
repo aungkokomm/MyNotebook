@@ -9,7 +9,7 @@ namespace MyNotebook.Core.Services;
 /// </summary>
 public sealed class StorageService : IStorageService
 {
-    private const int TargetVersion = 3;
+    private const int TargetVersion = 4;
     private readonly string _connectionString;
 
     public StorageService(IPathService paths)
@@ -67,6 +67,7 @@ public sealed class StorageService : IStorageService
         if (current < 1) Run(con, tx, "001_initial_schema.sql");
         if (current < 2) Run(con, tx, "002_note_versions.sql");
         if (current < 3) Run(con, tx, "003_search_trigram.sql");
+        if (current < 4) Run(con, tx, "004_timeline_index.sql");
         tx.Commit();
     }
 

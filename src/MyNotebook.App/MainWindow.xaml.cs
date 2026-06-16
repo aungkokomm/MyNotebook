@@ -878,6 +878,7 @@ public sealed partial class MainWindow : Window
         EditorPane.Visibility = Visibility.Collapsed;
         ThreadPane.Visibility = Visibility.Collapsed;
         SearchResultsPane.Visibility = Visibility.Collapsed;
+        TimelinePane.Visibility = Visibility.Collapsed;
         EmptyState.Visibility = Visibility.Collapsed;
     }
 
@@ -1909,6 +1910,92 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>Show ranked results as a rich list in the content pane.</summary>
+    // ================================================================ Timeline
+    // A notebook-wide, date-grouped view of every note. Rows are bucketed into
+    // natural sections (Today, Yesterday, this week/month, then by month) and
+    // wrapped in a SemanticZoom so the user can zoom out to jump between periods.
+
+    private TimelineAxis _timelineAxis = TimelineAxis.Modified;
+
+    private void Timeline_Click(object sender, RoutedEventArgs e) => ShowTimeline();
+
+    private void ShowTimeline()
+    {
+        StopTts();
+        HideDetailPanes();
+        TimelinePane.Visibility = Visibility.Visible;
+        SidebarTree.SelectedNode = null;   // a global view, not a single note
+        RebuildTimeline();
+    }
+
+    private void TimelineAxis_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (TimelineAxisCombo.SelectedItem is ComboBoxItem { Tag: string tag })
+            _timelineAxis = tag == "Created" ? TimelineAxis.Created : TimelineAxis.Modified;
+        if (TimelinePane.Visibility == Visibility.Visible) RebuildTimeline();
+    }
+
+    private void RebuildTimeline()
+    {
+        var now = DateTimeOffset.Now.LocalDateTime;
+        var groups = new List<TimelineGroup>();
+        TimelineGroup? cur = null;
+
+        // ListTimeline is already ordered newest-first by the chosen axis, so we can
+        // build groups in a single pass and they come out in the right order.
+        foreach (var n in _notes.ListTimeline(_timelineAxis))
+        {
+            var ts = _timelineAxis == TimelineAxis.Created ? n.CreatedAt : n.UpdatedAt;
+            var dt = DateTimeOffset.FromUnixTimeMilliseconds(ts).LocalDateTime;
+            var bucket = TimelineBucket(dt, now);
+            if (cur is null || cur.Key != bucket)
+            {
+                cur = new TimelineGroup { Key = bucket };
+                groups.Add(cur);
+            }
+
+            var title = EffectiveTitle(n);
+            var preview = FirstLine(n.BodyPlain);
+            if (string.Equals(preview, title, StringComparison.Ordinal)) preview = "";  // don't echo the title
+            cur.Add(new TimelineRow
+            {
+                NoteId = n.Id,
+                Type = n.Type,
+                Title = string.IsNullOrEmpty(title) ? "(untitled)" : title,
+                Preview = preview,
+                TimeText = dt.ToString("MMM d · h:mm tt"),
+            });
+        }
+
+        TimelineCvs.Source = groups;
+        TimelineList.ItemsSource = TimelineCvs.View;
+        TimelineJumpList.ItemsSource = TimelineCvs.View.CollectionGroups;
+    }
+
+    private void TimelineItem_Click(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is TimelineRow row) ShowNote(row.NoteId);
+    }
+
+    /// <summary>Natural date-bucket label for the timeline, relative to now (local time).</summary>
+    private static string TimelineBucket(DateTime dt, DateTime now)
+    {
+        var today = now.Date;
+        var day = dt.Date;
+        if (day == today) return "Today";
+        if (day == today.AddDays(-1)) return "Yesterday";
+        if (day > today.AddDays(-7)) return "Earlier this week";
+        if (day.Year == today.Year && day.Month == today.Month) return "Earlier this month";
+        return dt.ToString(day.Year == today.Year ? "MMMM" : "MMMM yyyy");
+    }
+
+    private static string FirstLine(string? plain)
+    {
+        if (string.IsNullOrWhiteSpace(plain)) return "";
+        var line = plain.Split('\n', '\r').FirstOrDefault(l => !string.IsNullOrWhiteSpace(l));
+        return line?.Trim() ?? "";
+    }
+
     private void ShowSearchResults(string query)
     {
         var hits = _notes.Search(query, limit: 100);

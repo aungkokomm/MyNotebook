@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="MyNotebook.App.AboutWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    mc:Ignorable="d"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">
+
+    <Grid>
+        <ScrollViewer Padding="28" VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="16" MaxWidth="460" HorizontalAlignment="Left">
+
+                <StackPanel Orientation="Horizontal" Spacing="14">
+                    <Image x:Name="AppLogo" Width="56" Height="56" VerticalAlignment="Top" />
+                    <StackPanel VerticalAlignment="Center" Spacing="2">
+                        <TextBlock Text="My Notebook" FontSize="24" FontWeight="SemiBold" />
+                        <TextBlock x:Name="VersionText" Opacity="0.7" />
+                    </StackPanel>
+                </StackPanel>
+
+                <TextBlock TextWrapping="Wrap" Opacity="0.85"
+                           Text="A fast, private, local-first notebook for Windows 11 — rich notes and OCR-searchable screenshot threads, with a Myanmar-aware search. No account, no cloud." />
+
+                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <FontIcon Glyph="&#xE71B;" FontSize="14" Opacity="0.8" />
+                    <HyperlinkButton x:Name="RepoLink" Padding="0"
+                                     Content="github.com/aungkokomm/MyNotebook"
+                                     NavigateUri="https://github.com/aungkokomm/MyNotebook" />
+                </StackPanel>
+
+                <InfoBar IsOpen="True" IsClosable="False" Severity="Warning"
+                         Title="Updates are manual"
+                         Message="My Notebook does not update itself. To get new features and fixes, open the Releases page and install the latest version over your current one — your notes are never touched.">
+                    <InfoBar.ActionButton>
+                        <Button Content="Check for updates" Click="CheckUpdates_Click" />
+                    </InfoBar.ActionButton>
+                </InfoBar>
+
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="ReleasesButton" Content="View all releases" Click="CheckUpdates_Click" />
+                    <Button x:Name="IssuesButton" Content="Report an issue" Click="Issues_Click" />
+                </StackPanel>
+
+                <TextBlock Opacity="0.55" FontSize="12" TextWrapping="Wrap"
+                           Text="© 2026 Aung Ko Ko · MIT licensed" />
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>

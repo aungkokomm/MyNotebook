@@ -128,6 +128,7 @@
 
                 <TextBlock Text="About" FontWeight="SemiBold" Opacity="0.8" Margin="0,16,0,4" />
                 <TextBlock x:Name="AboutText" Opacity="0.7" TextWrapping="Wrap" />
+                <Button x:Name="AboutButton" Content="About My Notebook" Click="About_Click" Margin="0,6,0,0" />
             </StackPanel>
         </ScrollViewer>
     </Grid>

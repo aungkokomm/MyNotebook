@@ -7,6 +7,15 @@ public enum NoteType
     Thread
 }
 
+/// <summary>Which timestamp the Timeline view orders and groups notes by.</summary>
+public enum TimelineAxis
+{
+    /// <summary>By last edit — a "recent activity" feed.</summary>
+    Modified,
+    /// <summary>By creation date — a journal view.</summary>
+    Created
+}
+
 public static class NoteTypeExtensions
 {
     public static string ToDbValue(this NoteType t) => t == NoteType.Thread ? "thread" : "note";

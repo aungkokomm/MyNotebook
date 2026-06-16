@@ -360,6 +360,19 @@ public sealed partial class SettingsWindow : Window
         await ShowInfoAsync("Search index rebuilt", "The full-text search index was rebuilt from your notes.");
     }
 
+    // ----------------------------------------------------------- About
+    private AboutWindow? _aboutWindow;
+
+    private void About_Click(object sender, RoutedEventArgs e)
+    {
+        if (_aboutWindow is null)
+        {
+            _aboutWindow = new AboutWindow();
+            _aboutWindow.Closed += (_, _) => _aboutWindow = null;
+        }
+        _aboutWindow.Activate();
+    }
+
     // ----------------------------------------------------------- Helpers
     private void RefreshStats()
     {

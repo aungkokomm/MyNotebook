@@ -211,6 +211,21 @@ public sealed class NoteService : INoteService
         return list;
     }
 
+    public IReadOnlyList<Note> ListTimeline(TimelineAxis axis = TimelineAxis.Modified)
+    {
+        // Column is chosen from a fixed set (never user input) — safe to inline.
+        var col = axis == TimelineAxis.Created ? "created_at" : "updated_at";
+        using var con = _storage.OpenConnection();
+        using var cmd = con.CreateCommand();
+        cmd.CommandText = $@"SELECT id,guid,folder_id,title,body_rtf,body_plain,note_type,
+                                    pinned,sort_order,created_at,updated_at,deleted
+                             FROM Notes WHERE deleted=0 ORDER BY {col} DESC";
+        using var r = cmd.ExecuteReader();
+        var list = new List<Note>();
+        while (r.Read()) list.Add(ReadNote(r));
+        return list;
+    }
+
     // ----------------------------------------------------------------- Images
     public ImageItem AddImage(long noteId, string relPath, int width, int height,
                               string ocrText = "", string caption = "")

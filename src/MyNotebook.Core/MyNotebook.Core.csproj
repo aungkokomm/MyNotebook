@@ -24,6 +24,8 @@
                       Link="Migrations\002_note_versions.sql" />
     <EmbeddedResource Include="..\..\db\migrations\003_search_trigram.sql"
                       Link="Migrations\003_search_trigram.sql" />
+    <EmbeddedResource Include="..\..\db\migrations\004_timeline_index.sql"
+                      Link="Migrations\004_timeline_index.sql" />
   </ItemGroup>
 
 </Project>
