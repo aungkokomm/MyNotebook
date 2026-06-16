@@ -23,6 +23,24 @@ Head to the [**Releases**](../../releases) page and run the latest
 `MyNotebook_Setup_vX.Y.Z.exe`. It installs **without admin rights**, runs **portable**, and
 **never touches your data** on upgrade. First launch even comes with a few sample notes.
 
+## 🤔 Why another note app?
+
+Because the popular ones each ask you to give something up:
+
+- **Notion / Evernote** keep your notes on *their* servers, behind an account, syncing whether you
+  like it or not. My Notebook has **no account, no cloud, no telemetry** — your notes are plain files
+  in a folder you control.
+- **Obsidian / Notion** are Electron apps that feel heavy on Windows. This is a **native WinUI 3 app**
+  — it starts fast and stays light.
+- **Apple Notes / OneNote** treat a pasted screenshot as a dumb picture. Here, **every screenshot is
+  OCR-indexed**, so you can search the *text inside* your images months later.
+- **Almost none of them search Myanmar properly.** Myanmar text has no spaces between words, so normal
+  full-text search misses it. My Notebook pairs a trigram index with full-text search so it finds a
+  word **in the middle of a Myanmar sentence** — and partial words in any language.
+
+If you want a notebook that is **fast, private, genuinely yours, and actually finds what you wrote**
+— including in Burmese and inside screenshots — that gap is the reason this exists.
+
 ## ✨ Why you'll like it
 
 - **It's yours.** Everything lives in a portable `Data/` folder next to the app — copy it to a
