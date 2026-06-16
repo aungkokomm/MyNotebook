@@ -53,8 +53,6 @@ Head to the [**Releases**](../../releases) page and run the latest
 
 <p align="center">
   <img src="screenshots/04-search.png" width="32%" alt="Search">
-  <img src="screenshots/02-new-note.png" width="32%" alt="Editor">
-  <img src="screenshots/06-settings-dark.png" width="32%" alt="Dark theme">
 </p>
 
 ## 🛠️ Tech
