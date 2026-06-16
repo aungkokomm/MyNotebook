@@ -12,6 +12,7 @@
   <img src="https://img.shields.io/badge/.NET-8.0-512BD4" alt=".NET 8">
   <img src="https://img.shields.io/badge/UI-WinUI%203-5C2D91" alt="WinUI 3">
   <a href="../../releases"><img src="https://img.shields.io/github/v/release/aungkokomm/MyNotebook?label=download" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
 </p>
 
 ---
@@ -108,6 +109,10 @@ next to the exe, falling back to `%LOCALAPPDATA%\MyNotebook` if that's read-only
 | `Ctrl+V` | Paste an image (inline in a note, or a card in a thread) |
 | `F11` / `Esc` | Toggle / leave focus mode |
 | `Win+Alt+N` | Quick Note (global, optional) |
+
+## 📄 License
+
+Released under the [MIT License](LICENSE).
 
 ---
 
