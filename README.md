@@ -74,7 +74,11 @@ If you want a notebook that is **fast, private, genuinely yours, and actually fi
 <p align="center">
  <img width="1920" height="1020" alt="image" src="https://github.com/user-attachments/assets/ccb24171-2fe1-49ce-9bbd-eea2e29d0705" />
 
-<img width="718" height="1020" alt="image" src="https://github.com/user-attachments/assets/8a154382-d949-4c15-8ae8-81a0cb5bd6d3" />
+<img width="464" height="401" alt="image" src="https://github.com/user-attachments/assets/3a069e2a-129d-40d9-a4d0-49f36948c153" />
+
+<img width="446" height="383" alt="image" src="https://github.com/user-attachments/assets/e5de20d1-087f-4de3-acdb-4e0b80f9bdb8" />
+
+
 
 </p>
 
