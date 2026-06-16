@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="MyNotebook.App/MyNotebook.App.csproj">
+    <Platform Project="x64" />
+  </Project>
+  <Project Path="MyNotebook.Core/MyNotebook.Core.csproj" />
+  <Project Path="MyNotebook.Tests/MyNotebook.Tests.csproj" />
+</Solution>

@@ -1,0 +1,22 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+publish/
+*.user
+
+# Installer output — shipped as GitHub Release assets, not committed
+installer/Output/
+
+# Logs and local test artifacts
+*.log
+test-results.json
+test-screenshot.png
+
+# WebView2 profile / runtime data created next to the exe
+WebView2/
+
+# Visual Studio / OS cruft
+.vs/
+*.suo
+Thumbs.db
+.DS_Store

@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- Matches the known-good config of the PocketReader WinUI app on this machine.
+         TFM 19041 (not 22621): Mica still applies at runtime on Win11; the SDK
+         projection version is unrelated to the backdrop. -->
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>MyNotebook.App</RootNamespace>
+    <Version>1.5.0</Version>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <UseWinUI>true</UseWinUI>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Portable, unpackaged, self-contained (decided): no machine-wide
+         WindowsAppSDK install, runs from a folder. -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>true</SelfContained>
+    <!-- Must stay TRUE even though unpackaged: this drives resources.pri generation
+         (compiled XAML + control resources). With it false the app builds fine but
+         crashes at startup with a 0xC000027B stowed exception because
+         XamlControlsResources / resources.pri can't be loaded. -->
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <AppxPackage>false</AppxPackage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 1.6.241114003 is the exact WinAppSDK build proven to run on this machine
+         (PocketReader). Newer servicing builds / 1.7 failed to bootstrap here. -->
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.241114003" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+    <PackageReference Include="QuestPDF" Version="2026.6.0" />
+    <PackageReference Include="PdfSharp" Version="6.1.1" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.1.0" />
+    <PackageReference Include="HtmlToOpenXml.dll" Version="3.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MyNotebook.Core\MyNotebook.Core.csproj" />
+  </ItemGroup>
+
+  <!-- Ship the icon next to the exe so AppWindow.SetIcon can load it at runtime. -->
+  <ItemGroup>
+    <Content Include="Assets\AppIcon.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>
