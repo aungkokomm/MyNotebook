@@ -13,6 +13,12 @@
     </Window.SystemBackdrop>
 
     <Grid>
+        <Grid.Resources>
+            <!-- Harmonize selection across the folder rail and the note list: drop the left
+                 accent pill so both panes show the same clean, rounded, inset highlight. -->
+            <SolidColorBrush x:Key="ListViewItemSelectionIndicatorBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="TreeViewItemSelectionIndicatorBrush" Color="Transparent" />
+        </Grid.Resources>
         <Grid.RowDefinitions>
             <RowDefinition Height="48" />
             <RowDefinition Height="*" />
@@ -26,8 +32,22 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="140" />
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="My Notebook" VerticalAlignment="Center"
-                       FontWeight="SemiBold" Margin="16,0,16,0" />
+            <StackPanel x:Name="TitleLeft" Grid.Column="0" Orientation="Horizontal"
+                        VerticalAlignment="Center" Margin="8,0,8,0" Spacing="2"
+                        SizeChanged="TitleLeft_SizeChanged">
+                <Button x:Name="RailToggleBtn" Click="ToggleRail_Click" Background="Transparent"
+                        BorderThickness="0" Width="36" Height="32" Padding="0" CornerRadius="6"
+                        ToolTipService.ToolTip="Hide / show folders">
+                    <FontIcon Glyph="&#xE700;" FontSize="15" />
+                </Button>
+                <Button x:Name="ListToggleBtn" Click="ToggleList_Click" Background="Transparent"
+                        BorderThickness="0" Width="36" Height="32" Padding="0" CornerRadius="6"
+                        ToolTipService.ToolTip="Hide / show the note list">
+                    <FontIcon Glyph="&#xE8A4;" FontSize="15" />
+                </Button>
+                <TextBlock Text="My Notebook" VerticalAlignment="Center" FontWeight="SemiBold"
+                           Margin="8,0,8,0" />
+            </StackPanel>
             <AutoSuggestBox x:Name="SearchBox" Grid.Column="1"
                             HorizontalAlignment="Center" VerticalAlignment="Center"
                             Width="440" Margin="12,0"
@@ -41,88 +61,229 @@
         </Grid>
 
         <!-- Sidebar (tree) | splitter | detail -->
-        <Grid Grid.Row="1">
+        <Grid x:Name="ContentArea" Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition x:Name="SidebarColumn" Width="260" MinWidth="180" />
+                <ColumnDefinition x:Name="RailColumn" Width="194" MinWidth="150" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition x:Name="NoteListColumn" Width="300" MinWidth="230" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" MinWidth="320" />
             </Grid.ColumnDefinitions>
 
             <!-- Sidebar: action header (aligned with the editor toolbar), tree, settings.
                  Background is set in code: a layer brush by default, or a theme tint. -->
-            <Grid x:Name="SidebarRoot" Grid.Column="0" Background="{ThemeResource LayerFillColorDefaultBrush}">
+            <!-- Folder rail: folders + All Notes / Smart Folders / Trash, then Timeline + Settings -->
+            <Border x:Name="RailCard" Grid.Column="0" CornerRadius="8,0,0,8" Margin="8,8,0,8"
+                    Background="{ThemeResource LayerFillColorDefaultBrush}">
+            <Grid x:Name="SidebarRoot">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="48" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <!-- Action header band -->
-                <Border Grid.Row="0" Padding="8,0" BorderThickness="0,0,0,1"
+                <Border Grid.Row="0" Padding="12,0,6,0" BorderThickness="0,0,0,1"
                         BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
-                    <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-                        <Button x:Name="NewNoteButton" Click="NewNote_Click"
-                                Style="{StaticResource AccentButtonStyle}" Padding="10,6"
-                                CornerRadius="6" ToolTipService.ToolTip="New note (Ctrl+N)">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <FontIcon Glyph="&#xE710;" FontSize="14" />
-                                <TextBlock Text="New note" />
-                            </StackPanel>
-                        </Button>
-                        <Button x:Name="NewThreadButton" Click="NewThread_Click"
-                                Background="Transparent" BorderThickness="0" Width="34" Height="32"
-                                Padding="0" CornerRadius="6"
-                                ToolTipService.ToolTip="New screenshot thread (Ctrl+T)">
-                            <FontIcon Glyph="&#xE722;" FontSize="15" />
-                        </Button>
-                        <Button x:Name="NewFolderButton" Click="NewFolder_Click"
-                                Background="Transparent" BorderThickness="0" Width="34" Height="32"
-                                Padding="0" CornerRadius="6"
-                                ToolTipService.ToolTip="New folder">
+                    <Grid VerticalAlignment="Center">
+                        <TextBlock Text="My Notebook" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <Button x:Name="NewFolderButton" Click="NewFolder_Click" HorizontalAlignment="Right"
+                                Background="Transparent" BorderThickness="0" Width="32" Height="32"
+                                Padding="0" CornerRadius="6" ToolTipService.ToolTip="New folder">
                             <FontIcon Glyph="&#xE8F4;" FontSize="15" />
                         </Button>
-                        <Rectangle Width="1" Height="18" Margin="3,0" VerticalAlignment="Center"
-                                   Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
-                        <Button x:Name="TimelineButton" Click="Timeline_Click"
-                                Background="Transparent" BorderThickness="0" Width="34" Height="32"
-                                Padding="0" CornerRadius="6"
-                                ToolTipService.ToolTip="Timeline — browse by date">
-                            <FontIcon Glyph="&#xE81C;" FontSize="15" />
-                        </Button>
-                    </StackPanel>
+                    </Grid>
                 </Border>
 
                 <TreeView x:Name="SidebarTree" Grid.Row="1" Margin="0,4,0,0"
                           AutomationProperties.AutomationId="SidebarTree"
                           SelectionMode="Single"
-                          CanDragItems="True" CanReorderItems="True"
                           ItemInvoked="SidebarTree_ItemInvoked"
                           Expanding="SidebarTree_Expanding"
                           KeyDown="SidebarTree_KeyDown"
                           RightTapped="SidebarTree_RightTapped"
-                          DragItemsStarting="SidebarTree_DragItemsStarting"
-                          DragItemsCompleted="SidebarTree_DragItemsCompleted">
+                          AllowDrop="True" DragOver="Rail_DragOver" Drop="Rail_Drop">
+                    <TreeView.Resources>
+                        <!-- Match the note-list rows: rounded, inset selection instead of a full-width bar. -->
+                        <Style TargetType="TreeViewItem">
+                            <Setter Property="CornerRadius" Value="6" />
+                            <Setter Property="Margin" Value="5,1" />
+                            <Setter Property="MinHeight" Value="32" />
+                        </Style>
+                    </TreeView.Resources>
                     <TreeView.ItemTemplate>
                         <DataTemplate>
-                            <TextBlock Text="{Binding Content.DisplayText}"
-                                       TextTrimming="CharacterEllipsis" />
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <FontIcon Glyph="{Binding Content.IconGlyph}" FontSize="15"
+                                          VerticalAlignment="Center"
+                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <TextBlock Text="{Binding Content.DisplayTitle}"
+                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                            </StackPanel>
                         </DataTemplate>
                     </TreeView.ItemTemplate>
                 </TreeView>
-                <Button Grid.Row="2" x:Name="SettingsButton" Click="SettingsButton_Click"
-                        HorizontalAlignment="Stretch" Margin="8" Padding="8"
-                        HorizontalContentAlignment="Left" Background="Transparent"
-                        BorderThickness="0">
-                    <StackPanel Orientation="Horizontal" Spacing="12">
-                        <FontIcon Glyph="&#xE713;" FontSize="16" />
-                        <TextBlock Text="Settings" />
-                    </StackPanel>
-                </Button>
+
+                <StackPanel Grid.Row="2" Margin="6,4,6,6">
+                    <Button x:Name="TimelineButton" Click="Timeline_Click" HorizontalAlignment="Stretch"
+                            Padding="8" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon Glyph="&#xE81C;" FontSize="16" />
+                            <TextBlock Text="Timeline" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="SettingsButton" Click="SettingsButton_Click" HorizontalAlignment="Stretch"
+                            Padding="8" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon Glyph="&#xE713;" FontSize="16" />
+                            <TextBlock Text="Settings" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
             </Grid>
+            </Border>
+
+            <!-- Note list (sits flush against the rail; the rail's shadow falls on its left edge) -->
+            <Border x:Name="NoteListCard" Grid.Column="2" CornerRadius="0,8,8,0" Margin="0,8,2,8"
+                    Background="{ThemeResource LayerFillColorDefaultBrush}">
+            <Grid x:Name="NoteListRoot">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="48" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" Padding="12,0,6,0" BorderThickness="0,0,0,1"
+                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+                    <Grid VerticalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock x:Name="NoteListTitle" Text="All Notes" FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis" />
+                            <TextBlock x:Name="NoteListCount" FontSize="11" Opacity="0.55" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="1">
+                            <Button x:Name="SortButton" Background="Transparent" BorderThickness="0"
+                                    Width="34" Height="32" Padding="0" CornerRadius="6" ToolTipService.ToolTip="Sort">
+                                <FontIcon Glyph="&#xE8CB;" FontSize="15" />
+                                <Button.Flyout>
+                                    <MenuFlyout>
+                                        <MenuFlyoutItem Text="Recently edited" Tag="modified" Click="Sort_Click" />
+                                        <MenuFlyoutItem Text="Recently created" Tag="created" Click="Sort_Click" />
+                                        <MenuFlyoutItem Text="Title (A–Z)" Tag="title" Click="Sort_Click" />
+                                    </MenuFlyout>
+                                </Button.Flyout>
+                            </Button>
+                            <Button x:Name="SelectButton" Click="ToggleSelectMode_Click" Background="Transparent"
+                                    BorderThickness="0" Width="34" Height="32" Padding="0" CornerRadius="6"
+                                    ToolTipService.ToolTip="Select multiple">
+                                <FontIcon Glyph="&#xE762;" FontSize="15" />
+                            </Button>
+                            <Button x:Name="NewThreadButton" Click="NewThread_Click" Background="Transparent"
+                                    BorderThickness="0" Width="34" Height="32" Padding="0" CornerRadius="6"
+                                    ToolTipService.ToolTip="New screenshot thread (Ctrl+T)">
+                                <FontIcon Glyph="&#xE722;" FontSize="15" />
+                            </Button>
+                            <Button x:Name="NewNoteButton" Click="NewNote_Click" Style="{StaticResource AccentButtonStyle}"
+                                    Width="34" Height="32" Padding="0" CornerRadius="6" Margin="2,0,0,0"
+                                    ToolTipService.ToolTip="New note (Ctrl+N)">
+                                <FontIcon Glyph="&#xE710;" FontSize="14" />
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <ListView x:Name="NoteList" Grid.Row="1" SelectionMode="Extended" IsItemClickEnabled="False"
+                          SelectionChanged="NoteList_SelectionChanged"
+                          CanDragItems="True" DragItemsStarting="NoteList_DragItemsStarting"
+                          RightTapped="NoteList_RightTapped" KeyDown="NoteList_KeyDown">
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            <Setter Property="Padding" Value="10,7" />
+                            <Setter Property="Margin" Value="5,1" />
+                            <Setter Property="CornerRadius" Value="6" />
+                        </Style>
+                    </ListView.ItemContainerStyle>
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="local:NoteListRow">
+                            <Grid ColumnSpacing="10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <FontIcon Grid.Column="0" Glyph="{x:Bind Glyph}" FontSize="15"
+                                          VerticalAlignment="Top" Margin="0,2,0,0"
+                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <StackPanel Grid.Column="1" Spacing="1">
+                                    <TextBlock Text="{x:Bind Title, Mode=OneWay}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{x:Bind Subtitle, Mode=OneWay}" FontSize="12" Opacity="0.6"
+                                               MaxLines="1" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                                <FontIcon Grid.Column="2" Glyph="&#xE840;" FontSize="12" VerticalAlignment="Top"
+                                          Margin="0,3,0,0" Visibility="{x:Bind PinVisibility, Mode=OneWay}"
+                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+                <TextBlock x:Name="NoteListEmpty" Grid.Row="1" Text="No notes here yet." Opacity="0.5"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" />
+
+                <Border x:Name="SelectBar" Grid.Row="2" Visibility="Collapsed" Padding="8"
+                        BorderThickness="0,1,0,0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="SelectCount" Grid.Column="0" Text="0 selected"
+                                   VerticalAlignment="Center" FontSize="13" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                            <Button x:Name="BulkMoveButton" ToolTipService.ToolTip="Move to…">
+                                <FontIcon Glyph="&#xE8DE;" FontSize="14" />
+                                <Button.Flyout>
+                                    <MenuFlyout x:Name="BulkMoveFlyout" />
+                                </Button.Flyout>
+                            </Button>
+                            <Button x:Name="BulkPinButton" Click="BulkPin_Click" ToolTipService.ToolTip="Pin / Unpin">
+                                <FontIcon Glyph="&#xE718;" FontSize="14" />
+                            </Button>
+                            <Button x:Name="BulkDeleteButton" Click="BulkDelete_Click" ToolTipService.ToolTip="Delete">
+                                <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                            </Button>
+                            <Button Content="Done" Click="CloseSelect_Click" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+            </Border>
+
+            <!-- The rail's "shadow" cast onto the note list: a soft gradient on the list's left edge. -->
+            <Rectangle x:Name="RailShadowEdge" Grid.Column="2" Width="14" HorizontalAlignment="Left"
+                       Margin="0,8,0,8" IsHitTestVisible="False">
+                <Rectangle.Fill>
+                    <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
+                        <GradientStop Offset="0" Color="#33000000" />
+                        <GradientStop Offset="1" Color="#00000000" />
+                    </LinearGradientBrush>
+                </Rectangle.Fill>
+            </Rectangle>
+
+            <!-- Rail resize grip: a thin overlay on the note list's left edge (the rail/list seam).
+                 Declared after the list so it stays on top and grabbable. -->
+            <local:ColumnSizer x:Name="RailSplitter" Grid.Column="2" Width="8" HorizontalAlignment="Left"
+                               Margin="0,8,0,8" Background="Transparent"
+                               PointerPressed="RailSplitter_PointerPressed"
+                               PointerMoved="RailSplitter_PointerMoved"
+                               PointerReleased="RailSplitter_PointerReleased" />
 
             <!-- Draggable column splitter. Background set in code so it matches the themed
                  chrome instead of letting the Mica backdrop (wallpaper) show through. -->
-            <local:ColumnSizer x:Name="SidebarSplitter" Grid.Column="1" Width="6"
+            <local:ColumnSizer x:Name="SidebarSplitter" Grid.Column="3" Width="6"
                                Background="Transparent"
                                PointerPressed="Splitter_PointerPressed"
                                PointerMoved="Splitter_PointerMoved"
@@ -132,7 +293,7 @@
                  No outer padding so the editor toolbar can dock flush at the top,
                  aligned with the sidebar's action header. Panes add their own padding.
                  Background (the "desk" the page floats on) is set in code per theme. -->
-            <Grid x:Name="ContentRoot" Grid.Column="2">
+            <Grid x:Name="ContentRoot" Grid.Column="4">
                 <!-- OneNote-style page: compact toolbar above a "paper" surface that holds
                      the title block (light typeface, date + time, rule line) and a
                      borderless editor sitting directly on the paper. -->
@@ -207,7 +368,8 @@
 
                     <!-- Formatting toolbar — docked flush to the page, aligned with the
                          sidebar action header. Drives the WebView2 editor via execCommand. -->
-                    <Border x:Name="ToolbarBar" Grid.Row="1" Height="48" Padding="10,0" BorderThickness="0,0,0,1"
+                    <Border x:Name="ToolbarBar" Grid.Row="1" Height="48" Padding="10,0"
+                            Margin="2,8,8,0" CornerRadius="8,8,0,0" BorderThickness="0,0,0,1"
                             Background="{ThemeResource LayerFillColorDefaultBrush}"
                             BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
                         <StackPanel Orientation="Horizontal" Spacing="1" VerticalAlignment="Center">
@@ -304,15 +466,11 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- The paper (inset from the flush toolbar and window edges).
-                         Translation + ThemeShadow lift it off the backdrop so it floats. -->
-                    <Border x:Name="PaperBorder" Grid.Row="2" CornerRadius="8" BorderThickness="1"
-                            Margin="16,12,16,18" Translation="0,0,28"
+                    <!-- The page: the rounded-bottom body of the editor card, flush under the toolbar. -->
+                    <Border x:Name="PaperBorder" Grid.Row="2" CornerRadius="0,0,8,8" BorderThickness="0"
+                            Margin="2,0,8,8"
                             Background="{ThemeResource PaperBrush}"
                             BorderBrush="{ThemeResource PaperStrokeBrush}">
-                        <Border.Shadow>
-                            <ThemeShadow />
-                        </Border.Shadow>
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
@@ -379,7 +537,7 @@
                 </Grid>
 
                 <!-- Screenshot thread: vertical image cards with timestamp -->
-                <Grid x:Name="ThreadPane" Visibility="Collapsed" Padding="16">
+                <Grid x:Name="ThreadPane" Visibility="Collapsed" Padding="16" IsTabStop="True">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />

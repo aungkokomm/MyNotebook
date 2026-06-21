@@ -51,7 +51,12 @@ If you want a notebook that is **fast, private, genuinely yours, and actually fi
   Ranked results, highlighted snippets, jump-to-match, and operators like `"phrase"`, `-exclude`,
   `title:`, `tag:`, `type:`.
 - **A real editor.** Paste a screenshot and it lands inline at **full resolution**, clickable, where
-  your cursor is — not a blurry thumbnail. Headings, lists, checklists, highlight, color, fonts.
+  your cursor is — not a blurry thumbnail. **Paste a whole web article** and the formatting *and*
+  images come with it — images are downloaded into the note so it stays offline. Headings, lists,
+  checklists, highlight, color, fonts.
+- **A workspace, not a list.** A **two-pane drawer** (folders rail + note list) you can collapse
+  either side of, **multi-select** notes (Ctrl/Shift-click) to move, pin, or delete in bulk, drag
+  notes onto folders, and a **Timeline** to browse everything by date.
 - **Made beautiful.** Light/dark plus **eight color themes** that recolor the whole UI (accent +
   matching page tint), with an intensity dial. Distraction-free focus mode when you need it.
 
@@ -59,7 +64,8 @@ If you want a notebook that is **fast, private, genuinely yours, and actually fi
 
 | | |
 |---|---|
-| ✍️ **Editor** | Inline full-res images, rich formatting, fonts, checklists, page styles |
+| 🗂️ **Workspace** | Two-pane drawer (folders + note list), collapsible panels, multi-select + bulk move/pin/delete, drag-to-folder, sort |
+| ✍️ **Editor** | Inline full-res images, **rich web paste** (formatting + images, kept offline), fonts, checklists, page styles |
 | 🖼️ **Screenshot threads** | Paste, drag-to-reorder, OCR-indexed, 100% floating viewer, export all |
 | 🔎 **Search** | Hybrid FTS5 + trigram (Myanmar/substring/OCR), operators, highlighted results |
 | 🔗 **Knowledge** | `[[wiki-links]]` + backlinks, OneNote-style web clipper (keeps the source URL) |

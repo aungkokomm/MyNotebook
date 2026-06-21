@@ -22,6 +22,7 @@ using Windows.System;
 using Microsoft.UI.Text;
 using Microsoft.Web.WebView2.Core;
 using System.Net;
+using System.Net.Http;
 using System.Text.Json;
 
 namespace MyNotebook.App;
@@ -68,10 +69,21 @@ public sealed partial class MainWindow : Window
     private string _recRel = "";
     private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
 
-    // Tree state
+    // Folder-rail (tree) state
     private readonly Dictionary<TreeViewNode, NodeItem> _info = new();
-    private readonly Dictionary<long, TreeViewNode> _noteNodes = new();
     private TreeViewNode? _unfiledNode;
+    private TreeViewNode? _allNotesNode;
+
+    // Note-list pane state
+    private readonly System.Collections.ObjectModel.ObservableCollection<NoteListRow> _noteRows = new();
+    private enum ListFilter { AllNotes, Folder, Unfiled, SmartFolder, Trash, Tag }
+    private ListFilter _filter = ListFilter.AllNotes;
+    private long _filterId;          // folder id (Folder) or tag id (Tag)
+    private string _filterQuery = "";
+    private string _filterTitle = "All Notes";
+    private string _sortMode = "modified";   // modified | created | title
+    private bool _selectMode;                // checkbox (touch) multi-select via the Select button
+    private bool _suppressOpen;              // guards programmatic selection from re-opening a note
 
     public MainWindow(INoteService notes, IOcrService ocr, IPathService paths, ISettingsService settings)
     {
@@ -89,7 +101,12 @@ public sealed partial class MainWindow : Window
         RestoreWindowPlacement();
 
         ThreadCards.ItemsSource = _cards;
-        SidebarColumn.Width = new GridLength(Math.Clamp(_settings.Current.SidebarWidth, 180, 600));
+        NoteList.ItemsSource = _noteRows;
+        _listSavedWidth = Math.Clamp(_settings.Current.SidebarWidth, 230, 600);
+        _railSavedWidth = Math.Clamp(_settings.Current.RailWidth, 150, 360);
+        NoteListColumn.Width = new GridLength(_listSavedWidth);
+        RailColumn.Width = new GridLength(_railSavedWidth);
+        UpdateDrawerChrome();
 
         ApplyTheme();
         ApplyBackdrop();
@@ -124,20 +141,28 @@ public sealed partial class MainWindow : Window
     private void AppTitleBar_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateSearchPassthrough();
     private void SearchBox_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateSearchPassthrough();
 
+    private void TitleLeft_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateSearchPassthrough();
+
     private void UpdateSearchPassthrough()
     {
         try
         {
             if (SearchBox.XamlRoot is null || SearchBox.ActualWidth < 1) return;
             var scale = SearchBox.XamlRoot.RasterizationScale;
-            var p = SearchBox.TransformToVisual(null).TransformPoint(new Windows.Foundation.Point(0, 0));
-            var rect = new Windows.Graphics.RectInt32(
-                (int)Math.Round(p.X * scale), (int)Math.Round(p.Y * scale),
-                (int)Math.Round(SearchBox.ActualWidth * scale), (int)Math.Round(SearchBox.ActualHeight * scale));
+            var rects = new List<Windows.Graphics.RectInt32> { RectFor(SearchBox, scale) };
+            if (TitleLeft.ActualWidth > 1) rects.Add(RectFor(TitleLeft, scale));
             InputNonClientPointerSource.GetForWindowId(AppWindow.Id)
-                .SetRegionRects(NonClientRegionKind.Passthrough, new[] { rect });
+                .SetRegionRects(NonClientRegionKind.Passthrough, rects.ToArray());
         }
         catch { }
+    }
+
+    private static Windows.Graphics.RectInt32 RectFor(FrameworkElement el, double scale)
+    {
+        var p = el.TransformToVisual(null).TransformPoint(new Windows.Foundation.Point(0, 0));
+        return new Windows.Graphics.RectInt32(
+            (int)Math.Round(p.X * scale), (int)Math.Round(p.Y * scale),
+            (int)Math.Round(el.ActualWidth * scale), (int)Math.Round(el.ActualHeight * scale));
     }
 
     // ================================================================ Sidebar
@@ -146,49 +171,36 @@ public sealed partial class MainWindow : Window
         _wikiDirty = true;   // structural change → refresh [[ ]] autocomplete list
         SidebarTree.RootNodes.Clear();
         _info.Clear();
-        _noteNodes.Clear();
+
+        _allNotesNode = MakeNode(new NodeItem { Kind = NodeKind.AllNotes, Title = "All Notes", Glyph = "🗂" });
+        SidebarTree.RootNodes.Add(_allNotesNode);
 
         var folders = _notes.ListFolders();
-        var notes = _notes.ListNotes();
-        // Key by folder id; 0 means "unfiled" (real folder ids start at 1). Dictionary
-        // can't hold a null key, so we never use long? as the key.
-        var byFolder = notes.GroupBy(n => n.FolderId ?? 0)
-                            .ToDictionary(g => g.Key, g => g.ToList());
-
         foreach (var f in folders.Where(f => f.ParentId is null))
-            SidebarTree.RootNodes.Add(BuildFolderNode(f, folders, byFolder));
+            SidebarTree.RootNodes.Add(BuildFolderNode(f, folders));
 
         _unfiledNode = MakeNode(new NodeItem { Kind = NodeKind.Unfiled, Title = "Unfiled", Glyph = "🗒" });
-        _unfiledNode.IsExpanded = true;
-        if (byFolder.TryGetValue(0, out var unfiled))
-            foreach (var n in unfiled) _unfiledNode.Children.Add(MakeNoteNode(n));
         SidebarTree.RootNodes.Add(_unfiledNode);
 
         var group = MakeNode(new NodeItem { Kind = NodeKind.Group, Title = "Smart Folders", Glyph = "🔎" });
+        group.IsExpanded = true;
         foreach (var s in _notes.ListSavedSearches())
-        {
-            var sn = MakeNode(new NodeItem { Kind = NodeKind.SmartFolder, Query = s.Query, Title = s.Name, Glyph = "🔎" });
-            sn.HasUnrealizedChildren = true;
-            group.Children.Add(sn);
-        }
+            group.Children.Add(MakeNode(new NodeItem { Kind = NodeKind.SmartFolder, Query = s.Query, Title = s.Name, Glyph = "🔎" }));
         SidebarTree.RootNodes.Add(group);
 
-        // Trash — lazily lists soft-deleted notes; restore / delete-forever via right-click.
         var trashCount = _notes.GetStats().DeletedNotes;
-        var trash = MakeNode(new NodeItem { Kind = NodeKind.Trash, Title = $"Trash ({trashCount})", Glyph = "🗑" });
-        trash.HasUnrealizedChildren = trashCount > 0;
-        SidebarTree.RootNodes.Add(trash);
+        SidebarTree.RootNodes.Add(MakeNode(new NodeItem { Kind = NodeKind.Trash, Title = $"Trash ({trashCount})", Glyph = "🗑" }));
+
+        HighlightCurrentFilterNode();   // re-select the node for the active filter
+        PopulateNoteList();             // refresh the note list to match
     }
 
-    private TreeViewNode BuildFolderNode(Folder f, IReadOnlyList<Folder> all,
-                                         Dictionary<long, List<Note>> byFolder)
+    private TreeViewNode BuildFolderNode(Folder f, IReadOnlyList<Folder> all)
     {
         var node = MakeNode(new NodeItem { Kind = NodeKind.Folder, Id = f.Id, Title = f.Name, Glyph = "📁" });
         node.IsExpanded = true;
         foreach (var sub in all.Where(x => x.ParentId == f.Id))
-            node.Children.Add(BuildFolderNode(sub, all, byFolder));
-        if (byFolder.TryGetValue(f.Id, out var ns))
-            foreach (var n in ns) node.Children.Add(MakeNoteNode(n));
+            node.Children.Add(BuildFolderNode(sub, all));
         return node;
     }
 
@@ -199,81 +211,352 @@ public sealed partial class MainWindow : Window
         return node;
     }
 
-    private TreeViewNode MakeNoteNode(Note n)
+    // ------------------------------------------------------------ Note list
+    private void ApplyFilter(ListFilter f, long id, string title, string query)
     {
-        var item = new NodeItem
+        _filter = f; _filterId = id; _filterTitle = title; _filterQuery = query;
+        if (_selectMode) ExitSelectMode();
+        HighlightCurrentFilterNode();
+        PopulateNoteList();
+    }
+
+    private void PopulateNoteList()
+    {
+        IEnumerable<Note> notes = _filter switch
         {
-            Kind = NodeKind.Note,
-            Id = n.Id,
-            Title = EffectiveTitle(n),
-            Pinned = n.Pinned,
-            Glyph = n.Type == NoteType.Thread ? "🖼" : "📝",
+            ListFilter.Folder => _notes.ListNotes(_filterId),
+            ListFilter.Unfiled => _notes.ListNotes().Where(n => n.FolderId is null),
+            ListFilter.SmartFolder => _notes.Search(_filterQuery, 300)
+                                            .Select(h => _notes.GetNote(h.NoteId)).Where(n => n is not null).Select(n => n!),
+            ListFilter.Trash => _notes.ListTrash(),
+            ListFilter.Tag => _notes.ListNotesWithTag(_filterId),
+            _ => _notes.ListNotes(),
         };
-        var node = MakeNode(item);
-        _noteNodes[n.Id] = node;
-        return node;
+
+        // Pinned float to the top (except in Trash), then by the chosen sort key.
+        bool trash = _filter == ListFilter.Trash;
+        var ordered = (_sortMode switch
+        {
+            "created" => notes.OrderByDescending(n => trash || n.Pinned).ThenByDescending(n => n.CreatedAt),
+            "title" => notes.OrderByDescending(n => trash || n.Pinned).ThenBy(n => EffectiveTitle(n), StringComparer.OrdinalIgnoreCase),
+            _ => notes.OrderByDescending(n => trash || n.Pinned).ThenByDescending(n => n.UpdatedAt),
+        }).ToList();
+        // The OrderByDescending(pinned) above also pulls non-pinned together; reassert pin-first.
+        if (!trash) ordered = ordered.OrderByDescending(n => n.Pinned).ToList();
+
+        _noteRows.Clear();
+        foreach (var n in ordered)
+        {
+            var t = EffectiveTitle(n);
+            _noteRows.Add(new NoteListRow
+            {
+                Id = n.Id, Type = n.Type, Pinned = n.Pinned && !trash,
+                Title = string.IsNullOrEmpty(t) ? "(untitled)" : t,
+                Subtitle = NoteSubtitle(n),
+            });
+        }
+
+        NoteListTitle.Text = _filterTitle;
+        NoteListCount.Text = ordered.Count == 1 ? "1 note" : $"{ordered.Count} notes";
+        NoteListEmpty.Visibility = ordered.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (_current is not null) SelectNoteInList(_current.Id);
+    }
+
+    private string NoteSubtitle(Note n)
+    {
+        var ts = _sortMode == "created" ? n.CreatedAt : n.UpdatedAt;
+        var when = DateTimeOffset.FromUnixTimeMilliseconds(ts).LocalDateTime.ToString("MMM d");
+        var snippet = FirstLine(n.BodyPlain);
+        if (string.Equals(snippet, EffectiveTitle(n), StringComparison.Ordinal)) snippet = "";
+        return snippet.Length > 0 ? $"{when} · {snippet}" : when;
+    }
+
+    private void SelectNoteInList(long id)
+    {
+        if (_selectMode) return;
+        var row = _noteRows.FirstOrDefault(r => r.Id == id);
+        if (row is null || ReferenceEquals(NoteList.SelectedItem, row)) return;
+        _suppressOpen = true;            // highlight only — don't re-trigger an open
+        NoteList.SelectedItem = row;
+        _suppressOpen = false;
+    }
+
+    private void HighlightCurrentFilterNode()
+    {
+        TreeViewNode? match = _filter switch
+        {
+            ListFilter.AllNotes => _allNotesNode,
+            ListFilter.Unfiled => _unfiledNode,
+            _ => _info.FirstOrDefault(kv =>
+                    (_filter == ListFilter.Folder && kv.Value.Kind == NodeKind.Folder && kv.Value.Id == _filterId) ||
+                    (_filter == ListFilter.SmartFolder && kv.Value.Kind == NodeKind.SmartFolder && kv.Value.Query == _filterQuery) ||
+                    (_filter == ListFilter.Trash && kv.Value.Kind == NodeKind.Trash)).Key,
+        };
+        if (match is not null) SidebarTree.SelectedNode = match;
     }
 
     private void SidebarTree_ItemInvoked(TreeView sender, TreeViewItemInvokedEventArgs args)
     {
-        if (args.InvokedItem is TreeViewNode node && _info.TryGetValue(node, out var item)
-            && (item.Kind == NodeKind.Note || item.Kind == NodeKind.TrashNote))
-            ShowNote(item.Id);   // viewing a trashed note is allowed; restore via right-click
+        if (args.InvokedItem is not TreeViewNode node || !_info.TryGetValue(node, out var item)) return;
+        switch (item.Kind)
+        {
+            case NodeKind.AllNotes:    ApplyFilter(ListFilter.AllNotes, 0, "All Notes", ""); break;
+            case NodeKind.Folder:      ApplyFilter(ListFilter.Folder, item.Id, item.Title, ""); break;
+            case NodeKind.Unfiled:     ApplyFilter(ListFilter.Unfiled, 0, "Unfiled", ""); break;
+            case NodeKind.SmartFolder: ApplyFilter(ListFilter.SmartFolder, 0, item.Title, item.Query); break;
+            case NodeKind.Trash:       ApplyFilter(ListFilter.Trash, 0, "Trash", ""); break;
+        }
     }
 
-    private void SidebarTree_Expanding(TreeView sender, TreeViewExpandingEventArgs args)
+    // Folders are realized eagerly and the special nodes are leaves, so there is nothing to lazy-load.
+    private void SidebarTree_Expanding(TreeView sender, TreeViewExpandingEventArgs args) { }
+
+    // Note deletion lives on the note list now (the tree holds only folders).
+    private void SidebarTree_KeyDown(object sender, KeyRoutedEventArgs e) { }
+
+    // ------------------------------------------------------- Note-list events
+    // Extended selection: a single click opens the note; Ctrl/Shift-click builds a
+    // multi-selection and reveals the action bar. The Select button offers the same
+    // via tappable checkboxes (Multiple mode) for touch/mouse-only use.
+    private void NoteList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        var node = args.Node;
-        if (!_info.TryGetValue(node, out var item) || !node.HasUnrealizedChildren) return;
+        if (_suppressOpen) return;
+        int count = NoteList.SelectedItems.Count;
 
-        if (item.Kind == NodeKind.SmartFolder)
+        if (_selectMode) { UpdateSelectCount(); return; }   // checkbox mode: bar already shown
+
+        if (count >= 2)
         {
-            node.Children.Clear();
-            foreach (var hit in _notes.Search(item.Query))
-            {
-                var n = _notes.GetNote(hit.NoteId);
-                if (n is not null) node.Children.Add(MakeNoteNode(n));
-            }
-            node.HasUnrealizedChildren = false;
+            if (SelectBar.Visibility != Visibility.Visible) BuildBulkMoveFlyout();
+            SelectBar.Visibility = Visibility.Visible;
+            UpdateSelectCount();
         }
-        else if (item.Kind == NodeKind.Trash)
+        else
         {
-            node.Children.Clear();
-            foreach (var n in _notes.ListTrash())
-            {
-                var ti = new NodeItem { Kind = NodeKind.TrashNote, Id = n.Id, Title = EffectiveTitle(n),
-                                        Glyph = n.Type == NoteType.Thread ? "🖼" : "📝" };
-                node.Children.Add(MakeNode(ti));
-            }
-            node.HasUnrealizedChildren = false;
+            SelectBar.Visibility = Visibility.Collapsed;
+            if (count == 1 && NoteList.SelectedItem is NoteListRow row && _current?.Id != row.Id)
+                ShowNote(row.Id);
         }
     }
 
-    private async void SidebarTree_KeyDown(object sender, KeyRoutedEventArgs e)
+    private void NoteList_RightTapped(object sender, Microsoft.UI.Xaml.Input.RightTappedRoutedEventArgs e)
+    {
+        if ((e.OriginalSource as FrameworkElement)?.DataContext is not NoteListRow row) return;
+        if (!_selectMode) NoteList.SelectedItem = row;
+        BuildNoteMenu(row.Id, _filter == ListFilter.Trash).ShowAt(NoteList,
+            new Microsoft.UI.Xaml.Controls.Primitives.FlyoutShowOptions { Position = e.GetPosition(NoteList) });
+    }
+
+    private async void NoteList_KeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (e.Key != VirtualKey.Delete) return;
-        if (SidebarTree.SelectedNode is not TreeViewNode node) return;
-        if (!_info.TryGetValue(node, out var item) || item.Kind != NodeKind.Note) return;
+        var ids = SelectedNoteIds();
+        if (ids.Count > 0) await DeleteNotes(ids, _filter == ListFilter.Trash);
+    }
 
-        if (_settings.Current.ConfirmBeforeDelete)
+    private List<long> SelectedNoteIds() => NoteList.SelectedItems.OfType<NoteListRow>().Select(r => r.Id).ToList();
+
+    // ---- select mode ----
+    private void ToggleSelectMode_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectMode) ExitSelectMode(); else EnterSelectMode();
+    }
+
+    // "Done": clears whatever multi-selection is active (checkbox mode or Ctrl/Shift) and hides the bar.
+    private void CloseSelect_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectMode) { ExitSelectMode(); return; }
+        SelectBar.Visibility = Visibility.Collapsed;
+        _suppressOpen = true;
+        NoteList.SelectedItems.Clear();
+        _suppressOpen = false;
+        if (_current is not null) SelectNoteInList(_current.Id);
+    }
+
+    private void EnterSelectMode()
+    {
+        _selectMode = true;
+        NoteList.SelectionMode = Microsoft.UI.Xaml.Controls.ListViewSelectionMode.Multiple;  // tappable checkboxes
+        SelectBar.Visibility = Visibility.Visible;
+        BuildBulkMoveFlyout();
+        UpdateSelectCount();
+    }
+
+    private void ExitSelectMode()
+    {
+        _selectMode = false;
+        SelectBar.Visibility = Visibility.Collapsed;
+        _suppressOpen = true;
+        NoteList.SelectionMode = Microsoft.UI.Xaml.Controls.ListViewSelectionMode.Extended;
+        NoteList.SelectedItems.Clear();
+        _suppressOpen = false;
+        if (_current is not null) SelectNoteInList(_current.Id);
+    }
+
+    private void UpdateSelectCount()
+    {
+        int c = NoteList.SelectedItems.Count;
+        SelectCount.Text = c == 1 ? "1 selected" : $"{c} selected";
+    }
+
+    private void BuildBulkMoveFlyout()
+    {
+        BulkMoveFlyout.Items.Clear();
+        var unfiled = new MenuFlyoutItem { Text = "Unfiled" };
+        unfiled.Click += (_, _) => BulkMoveTo(null);
+        BulkMoveFlyout.Items.Add(unfiled);
+        foreach (var f in _notes.ListFolders())
+        {
+            var fid = f.Id;
+            var mi = new MenuFlyoutItem { Text = f.Name };
+            mi.Click += (_, _) => BulkMoveTo(fid);
+            BulkMoveFlyout.Items.Add(mi);
+        }
+    }
+
+    private void BulkMoveTo(long? folderId)
+    {
+        foreach (var id in SelectedNoteIds()) _notes.MoveNoteToFolder(id, folderId);
+        ExitSelectMode();
+        PopulateNoteList();
+    }
+
+    private void BulkPin_Click(object sender, RoutedEventArgs e)
+    {
+        var ids = SelectedNoteIds();
+        if (ids.Count == 0) return;
+        bool pinAll = ids.Select(id => _notes.GetNote(id)).Any(n => n is { Pinned: false });
+        foreach (var id in ids) _notes.SetPinned(id, pinAll);
+        ExitSelectMode();
+        PopulateNoteList();
+    }
+
+    private async void BulkDelete_Click(object sender, RoutedEventArgs e)
+    {
+        var ids = SelectedNoteIds();
+        if (ids.Count > 0) await DeleteNotes(ids, _filter == ListFilter.Trash);
+    }
+
+    private async Task DeleteNotes(IReadOnlyList<long> ids, bool forever)
+    {
+        if (_settings.Current.ConfirmBeforeDelete || forever)
         {
             var d = new ContentDialog
             {
-                Title = "Delete note?",
-                Content = $"Move “{item.DisplayTitle}” to the trash?",
-                PrimaryButtonText = "Delete",
+                Title = forever ? "Delete forever?" : (ids.Count == 1 ? "Delete note?" : $"Delete {ids.Count} notes?"),
+                Content = forever
+                    ? $"Permanently delete {ids.Count} item(s) and their images. This cannot be undone."
+                    : (ids.Count == 1 ? "Move this note to the trash?" : $"Move {ids.Count} notes to the trash?"),
+                PrimaryButtonText = forever ? "Delete forever" : "Delete",
                 CloseButtonText = "Cancel",
                 DefaultButton = ContentDialogButton.Close,
                 XamlRoot = Content.XamlRoot,
             };
             if (await d.ShowAsync() != ContentDialogResult.Primary) return;
         }
+        foreach (var id in ids)
+        {
+            if (forever)
+                foreach (var rel in _notes.DeleteNoteForever(id))
+                    { try { System.IO.File.Delete(_paths.ToAbsolute(rel)); } catch { } }
+            else
+                _notes.SoftDeleteNote(id);
+            if (_current?.Id == id) { HideDetailPanes(); EmptyState.Visibility = Visibility.Visible; _current = null; }
+        }
+        if (_selectMode) ExitSelectMode();
+        BuildTree();   // refresh trash count + the list
+    }
 
-        _notes.SoftDeleteNote(item.Id);
-        node.Parent?.Children.Remove(node);
-        _info.Remove(node);
-        _noteNodes.Remove(item.Id);
-        if (_current?.Id == item.Id) { HideDetailPanes(); EmptyState.Visibility = Visibility.Visible; _current = null; }
+    // ---- sort ----
+    private void Sort_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuFlyoutItem { Tag: string tag }) { _sortMode = tag; PopulateNoteList(); }
+    }
+
+    // ---- drag a note (or the whole selection) onto a folder in the rail ----
+    private void NoteList_DragItemsStarting(object sender, DragItemsStartingEventArgs e)
+    {
+        var dragged = e.Items.OfType<NoteListRow>().Select(r => r.Id).ToList();
+        var sel = SelectedNoteIds();
+        var ids = (_selectMode && sel.Count > 0) ? sel.Union(dragged).Distinct().ToList() : dragged;
+        if (ids.Count == 0) { e.Cancel = true; return; }
+        e.Data.SetText("mnb-notes:" + string.Join(",", ids));
+        e.Data.RequestedOperation = DataPackageOperation.Move;
+    }
+
+    private void Rail_DragOver(object sender, DragEventArgs e)
+    {
+        var node = NodeFromSource(e.OriginalSource);
+        bool ok = node is not null && _info.TryGetValue(node, out var it)
+                  && it.Kind is NodeKind.Folder or NodeKind.Unfiled or NodeKind.AllNotes;
+        e.AcceptedOperation = ok ? DataPackageOperation.Move : DataPackageOperation.None;
+    }
+
+    private async void Rail_Drop(object sender, DragEventArgs e)
+    {
+        if (!e.DataView.Contains(StandardDataFormats.Text)) return;
+        var node = NodeFromSource(e.OriginalSource);
+        if (node is null || !_info.TryGetValue(node, out var it)) return;
+        long? target;
+        if (it.Kind == NodeKind.Folder) target = it.Id;
+        else if (it.Kind is NodeKind.Unfiled or NodeKind.AllNotes) target = null;
+        else return;
+
+        var text = await e.DataView.GetTextAsync();
+        if (!text.StartsWith("mnb-notes:")) return;
+        var ids = text["mnb-notes:".Length..].Split(',', StringSplitOptions.RemoveEmptyEntries)
+                      .Select(s => long.TryParse(s, out var v) ? v : 0).Where(v => v > 0);
+        foreach (var id in ids) _notes.MoveNoteToFolder(id, target);
+        if (_selectMode) ExitSelectMode();
+        PopulateNoteList();
+    }
+
+    // ---- per-row context menu (notes + trash) ----
+    private MenuFlyout BuildNoteMenu(long id, bool inTrash)
+    {
+        var menu = new MenuFlyout();
+        if (inTrash)
+        {
+            AddItem(menu, "Restore", () => RestoreFromTrash(id));
+            AddItem(menu, "Delete forever", () => _ = DeleteForeverPrompt(id, NoteTitleOf(id)));
+            return menu;
+        }
+        var note = _notes.GetNote(id);
+        bool pinned = note?.Pinned ?? false;
+        AddItem(menu, "Open", () => ShowNote(id));
+        AddItem(menu, pinned ? "Unpin" : "Pin", () => { _notes.SetPinned(id, !pinned); PopulateNoteList(); });
+        AddItem(menu, "Rename", () => _ = RenameNotePrompt(id));
+        var moveTo = new MenuFlyoutSubItem { Text = "Move to" };
+        var unfiled = new MenuFlyoutItem { Text = "Unfiled" };
+        unfiled.Click += (_, _) => MoveNote(id, null);
+        moveTo.Items.Add(unfiled);
+        foreach (var f in _notes.ListFolders())
+        {
+            var fid = f.Id;
+            var mi = new MenuFlyoutItem { Text = f.Name };
+            mi.Click += (_, _) => MoveNote(id, fid);
+            moveTo.Items.Add(mi);
+        }
+        menu.Items.Add(moveTo);
+        var export = new MenuFlyoutSubItem { Text = "Export" };
+        void Exp(string t, Action a) { var mi = new MenuFlyoutItem { Text = t }; mi.Click += (_, _) => a(); export.Items.Add(mi); }
+        Exp("PDF…", () => _ = ExportNotePdf(id));
+        Exp("Web page (HTML)…", () => _ = ExportNoteHtml(id));
+        Exp("Word (.docx)…", () => _ = ExportNoteWord(id));
+        menu.Items.Add(export);
+        AddItem(menu, "Print…", () => _ = PrintNote(id));
+        AddItem(menu, "Version history…", () => _ = ShowVersionHistory(id));
+        menu.Items.Add(new MenuFlyoutSeparator());
+        AddItem(menu, "Delete", () => _ = DeleteNotePrompt(id, NoteTitleOf(id)));
+        return menu;
+    }
+
+    private string NoteTitleOf(long id)
+    {
+        var n = _notes.GetNote(id);
+        if (n is null) return "";
+        var t = EffectiveTitle(n);
+        return string.IsNullOrEmpty(t) ? "(untitled)" : t;
     }
 
     // ---------------------------------------------------- Sidebar context menu
@@ -400,8 +683,8 @@ public sealed partial class MainWindow : Window
     private void CreateNoteInFolder(long folderId)
     {
         var note = _notes.CreateNote("New note", NoteType.Note, folderId);
-        BuildTree();
-        if (_noteNodes.TryGetValue(note.Id, out var n)) SidebarTree.SelectedNode = n;
+        var name = _notes.ListFolders().FirstOrDefault(f => f.Id == folderId)?.Name ?? "Folder";
+        ApplyFilter(ListFilter.Folder, folderId, name, "");
         ShowNote(note.Id);
     }
 
@@ -473,8 +756,7 @@ public sealed partial class MainWindow : Window
     private void MoveNote(long noteId, long? folderId)
     {
         _notes.MoveNoteToFolder(noteId, folderId);
-        BuildTree();
-        if (_noteNodes.TryGetValue(noteId, out var n)) SidebarTree.SelectedNode = n;
+        PopulateNoteList();   // the note may have left the current filter
     }
 
     private async Task<string?> PromptTextAsync(string title, string initial)
@@ -778,15 +1060,8 @@ public sealed partial class MainWindow : Window
 
     private void FilterByTag(Tag tag)
     {
-        var hits = _notes.ListNotesWithTag(tag.Id);
-        SidebarTree.RootNodes.Clear();
-        _info.Clear();
-        _noteNodes.Clear();
-        _unfiledNode = null;
-        var group = MakeNode(new NodeItem { Kind = NodeKind.Group, Title = $"#{tag.Name} ({hits.Count})", Glyph = "🏷" });
-        group.IsExpanded = true;
-        foreach (var n in hits) group.Children.Add(MakeNoteNode(n));
-        SidebarTree.RootNodes.Add(group);
+        SidebarTree.SelectedNode = null;   // a tag view isn't a tree node
+        ApplyFilter(ListFilter.Tag, tag.Id, $"#{tag.Name}", "");
     }
 
     private void AddTag_Click(object sender, RoutedEventArgs e) => AddCurrentTag();
@@ -852,6 +1127,7 @@ public sealed partial class MainWindow : Window
             ThreadPane.Visibility = Visibility.Visible;
             ThreadTitleBox.Text = note.Title;
             LoadCards(note.Id);
+            ThreadPane.Focus(FocusState.Programmatic);   // scope Ctrl+V paste to the thread pane
         }
         else
         {
@@ -869,8 +1145,7 @@ public sealed partial class MainWindow : Window
         }
         _loadingNote = false;
 
-        if (_noteNodes.TryGetValue(id, out var n) && SidebarTree.SelectedNode != n)
-            SidebarTree.SelectedNode = n;
+        SelectNoteInList(id);
     }
 
     private void HideDetailPanes()
@@ -945,6 +1220,9 @@ public sealed partial class MainWindow : Window
             case "img":
                 _ = HandleWebPasteImage(m.Data ?? "");
                 break;
+            case "pasteimg":
+                _ = HandleWebPasteRemoteImage(m.Src ?? "", m.Data ?? "");
+                break;
             case "open":
                 var rel = (m.Src ?? "").Replace('/', Path.DirectorySeparatorChar);
                 if (rel.Length > 0) OpenImageViewer(_paths.ToAbsolute(rel));
@@ -987,10 +1265,29 @@ public sealed partial class MainWindow : Window
             if (!m.Success) return;
             var url = m.Groups[1].Value.Trim();
             if (!(url.StartsWith("http://") || url.StartsWith("https://"))) return;
+            url = CleanTrackingUrl(url);
             if (NoteWeb.CoreWebView2 is not null)
                 await NoteWeb.CoreWebView2.ExecuteScriptAsync($"appendSource({JsonSerializer.Serialize(url)})");
         }
         catch { }
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex TrackingParam = new(
+        @"^(utm_.*|fbclid|gclid|gclsrc|dclid|msclkid|igshid|mc_eid|mc_cid|mkt_tok|_hsenc|_hsmi|hsa_.*|vero_id|vero_conv|oly_enc_id|oly_anon_id|piwik_.*|pk_.*|yclid|_openstat|ref|ref_src|spm|triedRedirect)$",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>Drop common tracking query params (utm_*, fbclid, …) from a URL, keeping path + fragment.</summary>
+    private static string CleanTrackingUrl(string url)
+    {
+        int q = url.IndexOf('?');
+        if (q < 0) return url;
+        string head = url[..q], query = url[(q + 1)..], frag = "";
+        int hash = query.IndexOf('#');
+        if (hash >= 0) { frag = query[hash..]; query = query[..hash]; }
+        var kept = query.Split('&', StringSplitOptions.RemoveEmptyEntries)
+                        .Where(p => !TrackingParam.IsMatch(p.Split('=', 2)[0]));
+        var nq = string.Join("&", kept);
+        return head + (nq.Length > 0 ? "?" + nq : "") + frag;
     }
 
     private void LoadNoteIntoWeb(Note note)
@@ -1065,40 +1362,177 @@ public sealed partial class MainWindow : Window
         UpdateNodeTitle(_current);
     }
 
-    /// <summary>Decode a pasted data-URL, save it full-resolution, and insert it at the caret.</summary>
+    /// <summary>Decode a pasted data-URL, save it (de-duped/downscaled/OCR'd), and insert it at the caret.</summary>
     private async Task HandleWebPasteImage(string dataUrl)
     {
         if (_current is null || string.IsNullOrEmpty(dataUrl)) return;
+        var noteId = _current.Id;
         try
         {
             int comma = dataUrl.IndexOf(',');
             if (comma < 0) return;
             var bytes = Convert.FromBase64String(dataUrl[(comma + 1)..]);
 
-            var rel = _paths.NewScreenshotRelPath(_current.Id);
-            var abs = _paths.ToAbsolute(rel);
-            Directory.CreateDirectory(Path.GetDirectoryName(abs)!);
-            await File.WriteAllBytesAsync(abs, bytes);
-
-            int w = 0, h = 0;
-            try
-            {
-                var file = await StorageFile.GetFileFromPathAsync(abs);
-                using var s = await file.OpenReadAsync();
-                var dec = await BitmapDecoder.CreateAsync(s);
-                w = (int)dec.PixelWidth; h = (int)dec.PixelHeight;
-            }
-            catch { }
-            _notes.AddImage(_current.Id, rel, w, h);
+            var rel = await SavePastedImageBytesAsync(noteId, bytes);
+            if (rel is null) return;
 
             var relWeb = rel.Replace('\\', '/');
             var url = "https://notes.local/" + relWeb;
-            var js = $"insertImage({JsonSerializer.Serialize(url)},{JsonSerializer.Serialize(relWeb)})";
-            await NoteWeb.CoreWebView2.ExecuteScriptAsync(js);
+            if (_current?.Id == noteId && NoteWeb.CoreWebView2 is not null)
+                await NoteWeb.CoreWebView2.ExecuteScriptAsync(
+                    $"insertImage({JsonSerializer.Serialize(url)},{JsonSerializer.Serialize(relWeb)})");
         }
         catch (Exception ex)
         {
             Debug.WriteLine("paste image failed: " + ex);
+        }
+    }
+
+    // One shared client for pulling images referenced by pasted web content.
+    private static readonly HttpClient _httpImages = new() { Timeout = TimeSpan.FromSeconds(20) };
+    private const long MaxPasteImageBytes = 25_000_000;
+
+    /// <summary>
+    /// An image referenced by pasted HTML (a remote http(s) URL or an inline data: URI).
+    /// Download/decode it, save it as a local attachment, and rewrite the matching
+    /// &lt;img&gt; in the editor to the local copy — so the note stays fully offline.
+    /// </summary>
+    private async Task HandleWebPasteRemoteImage(string src, string token)
+    {
+        if (_current is null || string.IsNullOrEmpty(src) || string.IsNullOrEmpty(token)) return;
+        var noteId = _current.Id;
+        try
+        {
+            byte[] bytes;
+            if (src.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+            {
+                int comma = src.IndexOf(',');
+                if (comma < 0) return;
+                bytes = Convert.FromBase64String(src[(comma + 1)..]);
+            }
+            else if (src.StartsWith("http://") || src.StartsWith("https://"))
+            {
+                using var resp = await _httpImages.GetAsync(src, HttpCompletionOption.ResponseHeadersRead);
+                if (!resp.IsSuccessStatusCode) return;
+                var ct = resp.Content.Headers.ContentType?.MediaType ?? "";
+                if (ct.Length > 0 && !ct.StartsWith("image/", StringComparison.OrdinalIgnoreCase)) return;
+                if ((resp.Content.Headers.ContentLength ?? 0) > MaxPasteImageBytes) return;
+                bytes = await resp.Content.ReadAsByteArrayAsync();
+            }
+            else return;
+
+            if (bytes.Length == 0 || bytes.Length > MaxPasteImageBytes) return;
+
+            var rel = await SavePastedImageBytesAsync(noteId, bytes);
+            if (rel is null) return;
+
+            var relWeb = rel.Replace('\\', '/');
+            var url = "https://notes.local/" + relWeb;
+            if (_current?.Id == noteId && NoteWeb.CoreWebView2 is not null)
+                await NoteWeb.CoreWebView2.ExecuteScriptAsync(
+                    $"localizeImage({JsonSerializer.Serialize(token)},{JsonSerializer.Serialize(url)},{JsonSerializer.Serialize(relWeb)})");
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine("paste remote image failed: " + ex);
+        }
+    }
+
+    // De-dupe pasted images within a session: content hash -> stored relative path.
+    private readonly Dictionary<string, string> _pasteImageCache = new();
+    private readonly SemaphoreSlim _ocrGate = new(1, 1);
+    private const int MaxImageEdge = 2600;   // downscale anything larger to keep the folder lean
+
+    /// <summary>
+    /// Shared sink for every pasted image (screenshot, article image, data: URI). De-dupes by
+    /// content hash, downscales oversized images, saves the attachment, and OCR-indexes it in the
+    /// background so pasted images are searchable like screenshot threads. Returns the rel path.
+    /// </summary>
+    private async Task<string?> SavePastedImageBytesAsync(long noteId, byte[] bytes)
+    {
+        if (bytes.Length == 0) return null;
+
+        var hash = noteId + ":" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));
+        if (_pasteImageCache.TryGetValue(hash, out var cachedRel)) return cachedRel;   // identical image already saved
+
+        bytes = await MaybeDownscaleAsync(bytes);
+
+        var rel = _paths.NewScreenshotRelPath(noteId);
+        var abs = _paths.ToAbsolute(rel);
+        Directory.CreateDirectory(Path.GetDirectoryName(abs)!);
+        await File.WriteAllBytesAsync(abs, bytes);
+
+        int w = 0, h = 0;
+        try
+        {
+            var file = await StorageFile.GetFileFromPathAsync(abs);
+            using var s = await file.OpenReadAsync();
+            var dec = await BitmapDecoder.CreateAsync(s);
+            w = (int)dec.PixelWidth; h = (int)dec.PixelHeight;
+        }
+        catch
+        {
+            // Not a decodable raster (e.g. SVG) — drop it rather than leave a broken file.
+            try { File.Delete(abs); } catch { }
+            return null;
+        }
+
+        var img = _notes.AddImage(noteId, rel, w, h);
+        _pasteImageCache[hash] = rel;
+
+        if (_ocr.IsAvailable)
+            _ = OcrPastedImageAsync(img.Id, abs);   // background; serialized via _ocrGate
+
+        return rel;
+    }
+
+    private async Task OcrPastedImageAsync(long imageId, string absPath)
+    {
+        await _ocrGate.WaitAsync();
+        try
+        {
+            var text = await _ocr.RecognizeAsync(absPath);
+            if (!string.IsNullOrWhiteSpace(text)) _notes.UpdateImageOcr(imageId, text);
+        }
+        catch { /* OCR is best-effort */ }
+        finally { _ocrGate.Release(); }
+    }
+
+    /// <summary>Re-encode an image down to <see cref="MaxImageEdge"/> on its long edge (same codec). No-op when small or on error.</summary>
+    private static async Task<byte[]> MaybeDownscaleAsync(byte[] bytes)
+    {
+        try
+        {
+            using var src = new InMemoryRandomAccessStream();
+            var writer = new DataWriter(src);
+            writer.WriteBytes(bytes);
+            await writer.StoreAsync();
+            writer.DetachStream();
+            src.Seek(0);
+
+            var dec = await BitmapDecoder.CreateAsync(src);
+            uint w = dec.PixelWidth, h = dec.PixelHeight, maxEdge = Math.Max(w, h);
+            if (maxEdge <= MaxImageEdge) return bytes;
+
+            double scale = (double)MaxImageEdge / maxEdge;
+            using var outStream = new InMemoryRandomAccessStream();
+            var enc = await BitmapEncoder.CreateForTranscodingAsync(outStream, dec);
+            enc.BitmapTransform.ScaledWidth = (uint)Math.Round(w * scale);
+            enc.BitmapTransform.ScaledHeight = (uint)Math.Round(h * scale);
+            enc.BitmapTransform.InterpolationMode = BitmapInterpolationMode.Fant;
+            await enc.FlushAsync();
+
+            outStream.Seek(0);
+            var len = (uint)outStream.Size;
+            var reader = new DataReader(outStream);
+            await reader.LoadAsync(len);
+            var outBytes = new byte[len];
+            reader.ReadBytes(outBytes);
+            return outBytes;
+        }
+        catch
+        {
+            return bytes;   // keep the original on any decode/encode failure
         }
     }
 
@@ -1129,7 +1563,8 @@ public sealed partial class MainWindow : Window
      padding:20px 28px 96px 28px;
      font-family:Calibri,'Segoe UI','Myanmar Text',sans-serif;font-size:16px;line-height:1.75;
      color:#1c1c1c;-webkit-user-select:text;word-wrap:break-word;}
- #ed>div,#ed>p{margin:0 0 .65em;}
+ #ed>div{margin:0 0 .65em;}
+ #ed p{margin:0 0 .65em;}
  #ed.lines{background-image:repeating-linear-gradient(to bottom,transparent 0,transparent calc(1.75em - 1px),
      var(--rule,rgba(0,0,0,.08)) calc(1.75em - 1px),var(--rule,rgba(0,0,0,.08)) 1.75em);
      background-position:0 20px;}
@@ -1137,8 +1572,19 @@ public sealed partial class MainWindow : Window
  #ed img{max-width:100%;height:auto;display:block;margin:14px 0;border-radius:4px;cursor:zoom-in;
      box-shadow:0 1px 5px rgba(0,0,0,.2);}
  #ed ul,#ed ol{margin:.2em 0 .6em 1.4em;padding-left:1em;}
- #ed h1{font-size:1.5em;font-weight:600;margin:.4em 0 .3em;}
- #ed h2{font-size:1.25em;font-weight:600;margin:.4em 0 .3em;}
+ #ed li{margin:.15em 0;}
+ #ed h1{font-size:1.6em;font-weight:600;line-height:1.25;margin:.6em 0 .3em;}
+ #ed h2{font-size:1.35em;font-weight:600;line-height:1.3;margin:.6em 0 .3em;}
+ #ed h3{font-size:1.15em;font-weight:600;margin:.5em 0 .25em;}
+ #ed h4{font-size:1.02em;font-weight:600;margin:.5em 0 .25em;}
+ #ed h5,#ed h6{font-size:.95em;font-weight:600;opacity:.85;margin:.5em 0 .25em;}
+ #ed blockquote{margin:.6em 0;padding:.15em 0 .15em 1em;border-left:3px solid rgba(128,128,128,.45);opacity:.92;}
+ #ed pre{background:rgba(128,128,128,.12);padding:10px 12px;border-radius:6px;overflow:auto;
+     font-family:Consolas,'Cascadia Mono',monospace;font-size:.92em;line-height:1.5;}
+ #ed code{background:rgba(128,128,128,.14);padding:.05em .35em;border-radius:4px;
+     font-family:Consolas,'Cascadia Mono',monospace;font-size:.92em;}
+ #ed pre code{background:none;padding:0;}
+ #ed figure{margin:.6em 0;}#ed figcaption{font-size:.85em;opacity:.65;margin-top:.25em;}
  ::-webkit-scrollbar{width:12px;}::-webkit-scrollbar-thumb{background:rgba(128,128,128,.4);border-radius:6px;}
  a{color:#3b82f6;}#ed a.wl{color:#3b82f6;text-decoration:none;border-bottom:1px solid rgba(59,130,246,.4);cursor:pointer;}
  #ed .src{margin:6px 0 10px;}#ed .src small{opacity:.65;}
@@ -1159,17 +1605,92 @@ public sealed partial class MainWindow : Window
  var t=null,curId=0;
  function save(){clearTimeout(t);t=setTimeout(function(){post({type:'save',id:curId,html:ed.innerHTML,text:ed.innerText});},400);}
  ed.addEventListener('input',function(){clearJump();save();});
+ // Tags kept when pasting rich web content; others are unwrapped (children kept) or
+ // dropped (script/style/etc.) so a page's CSS/JS can't leak into or break the editor.
+ var PASTE_OK={A:1,B:1,STRONG:1,I:1,EM:1,U:1,S:1,STRIKE:1,SUB:1,SUP:1,MARK:1,P:1,DIV:1,BR:1,
+   SPAN:1,H1:1,H2:1,H3:1,H4:1,H5:1,H6:1,UL:1,OL:1,LI:1,BLOCKQUOTE:1,PRE:1,CODE:1,HR:1,IMG:1,
+   FIGURE:1,FIGCAPTION:1,TABLE:1,THEAD:1,TBODY:1,TR:1,TD:1,TH:1};
+ var PASTE_DROP={SCRIPT:1,STYLE:1,LINK:1,META:1,NOSCRIPT:1,HEAD:1,TITLE:1,SVG:1,IFRAME:1,
+   OBJECT:1,EMBED:1,FORM:1,INPUT:1,BUTTON:1,SELECT:1,TEXTAREA:1,VIDEO:1,AUDIO:1};
+ var imgSeq=0;
+ var plainNext=false;   // set by Ctrl+Shift+V -> next paste is plain text
+ // Strip common tracking params from pasted links so notes stay clean.
+ var TRACK=/^(utm_.*|fbclid|gclid|gclsrc|dclid|msclkid|igshid|mc_eid|mc_cid|mkt_tok|_hsenc|_hsmi|hsa_.*|vero_id|vero_conv|oly_enc_id|oly_anon_id|piwik_.*|pk_.*|yclid|_openstat|ref|ref_src|spm|triedRedirect)$/i;
+ function cleanUrl(u){try{var url=new URL(u);var del=[];url.searchParams.forEach(function(v,k){if(TRACK.test(k))del.push(k);});for(var i=0;i<del.length;i++)url.searchParams.delete(del[i]);return url.toString();}catch(e){return u;}}
+ // True if a node contains block-level content (so we never let an <a> wrap blocks).
+ function hasBlock(n){return !!(n.querySelector&&n.querySelector('p,div,h1,h2,h3,h4,h5,h6,ul,ol,li,blockquote,table,figure,hr,pre'));}
+ function cleanInto(src,dst){
+   for(var c=src.firstChild;c;c=c.nextSibling){
+     if(c.nodeType===3){dst.appendChild(document.createTextNode(c.nodeValue));continue;}
+     if(c.nodeType!==1)continue;
+     var tag=c.tagName;
+     if(PASTE_DROP[tag])continue;
+     if(tag==='A'){
+       // Keep only genuine INLINE links. Sites often wrap the whole article in one <a>,
+       // which the browser flattens — turning every heading into same-size blue text.
+       var h=c.getAttribute('href')||'';
+       if(/^(https?:|mailto:)/i.test(h)&&!hasBlock(c)){
+         var a=document.createElement('a');a.setAttribute('href',cleanUrl(h));a.setAttribute('target','_blank');
+         cleanInto(c,a);dst.appendChild(a);
+       } else { cleanInto(c,dst); }                        // unwrap block-wrapping / junk links
+       continue;
+     }
+     if(!PASTE_OK[tag]){cleanInto(c,dst);continue;}        // unwrap unknown tag, keep its text
+     var el=document.createElement(tag);
+     if(tag==='IMG'){var s=c.getAttribute('src')||'';if(!/^(https?:|data:image\/)/i.test(s))continue;el.setAttribute('src',s);var al=c.getAttribute('alt');if(al)el.setAttribute('alt',al);}
+     // Keep structural emphasis only — NOT source colors/sizes, so pasted text adopts the
+     // editor's own (themed) typography instead of clashing blues and flat sizes.
+     var st=c.getAttribute('style');
+     if(st){var keep=st.match(/(font-weight|font-style|text-decoration|text-align)\s*:[^;]+/gi);if(keep)el.setAttribute('style',keep.join(';'));}
+     cleanInto(c,el);
+     dst.appendChild(el);
+   }
+ }
+ // C# calls this after it has saved a pasted image locally: swap the remote/data src
+ // for the local copy and tag it so it's clickable + persists offline.
+ function localizeImage(tok,url,rel){
+   var im=ed.querySelector('img[data-tok="'+tok+'"]');
+   if(!im)return;
+   im.setAttribute('src',url);im.setAttribute('data-rel',rel);im.removeAttribute('data-tok');save();
+ }
  ed.addEventListener('paste',function(e){
-   var items=(e.clipboardData||{}).items||[];
-   for(var i=0;i<items.length;i++){
-     if(items[i].type&&items[i].type.indexOf('image')===0){
-       e.preventDefault();snap();
-       var f=items[i].getAsFile();var r=new FileReader();
-       r.onload=function(){post({type:'img',data:r.result});};r.readAsDataURL(f);return;
+   var cd=e.clipboardData||window.clipboardData;
+   // Ctrl+Shift+V: force plain text, ignoring formatting and images.
+   if(plainNext){plainNext=false;e.preventDefault();
+     document.execCommand('insertText',false,cd?cd.getData('text'):'');post({type:'pasted'});return;}
+   var types=(cd&&cd.types)||[];
+   var hasHtml=Array.prototype.indexOf.call(types,'text/html')>=0;
+   var items=(cd&&cd.items)||[];
+   // A pure image copy (screenshot / "Copy image") with no rich HTML -> store as a screenshot.
+   if(!hasHtml){
+     for(var i=0;i<items.length;i++){
+       if(items[i].type&&items[i].type.indexOf('image')===0){
+         e.preventDefault();snap();
+         var f=items[i].getAsFile();var r=new FileReader();
+         r.onload=function(){post({type:'img',data:r.result});};r.readAsDataURL(f);return;
+       }
      }
    }
+   // Rich web content: keep the formatting + images, then localize every image.
+   if(hasHtml){
+     var html=cd.getData('text/html');
+     if(html&&html.trim()){
+       e.preventDefault();
+       var tmp=document.createElement('div');tmp.innerHTML=html;
+       var box=document.createElement('div');cleanInto(tmp,box);
+       var imgs=box.querySelectorAll('img'),jobs=[];
+       for(var j=0;j<imgs.length;j++){
+         var src=imgs[j].getAttribute('src')||'';
+         if(/^(https?:|data:image\/)/i.test(src)){var tok='pi'+(imgSeq++);imgs[j].setAttribute('data-tok',tok);jobs.push([tok,src]);}
+       }
+       document.execCommand('insertHTML',false,box.innerHTML);
+       for(var k=0;k<jobs.length;k++)post({type:'pasteimg',src:jobs[k][1],data:jobs[k][0]});
+       post({type:'pasted'});save();return;
+     }
+   }
+   // Plain text fallback.
    e.preventDefault();
-   var txt=(e.clipboardData||window.clipboardData).getData('text');
+   var txt=cd?cd.getData('text'):'';
    document.execCommand('insertText',false,txt);
    post({type:'pasted'});
  });
@@ -1195,6 +1716,7 @@ public sealed partial class MainWindow : Window
      if(e.key==='Enter'||e.key==='Tab'){e.preventDefault();chooseWl(wlSel);return;}
      if(e.key==='Escape'){e.preventDefault();closeWl();return;}
    }
+   if((e.ctrlKey||e.metaKey)&&e.shiftKey&&(e.key==='v'||e.key==='V')){plainNext=true;setTimeout(function(){plainNext=false;},500);return;}
    if(e.ctrlKey&&(e.key==='f'||e.key==='F'||e.key==='k'||e.key==='K')){e.preventDefault();post({type:'focussearch'});}
    else if(e.ctrlKey&&(e.key==='h'||e.key==='H')){e.preventDefault();post({type:'find'});}
    else if(e.key==='F11'){e.preventDefault();post({type:'togglefocus'});}
@@ -1338,8 +1860,14 @@ public sealed partial class MainWindow : Window
 
     private void UpdateNodeTitle(Note note)
     {
-        if (_noteNodes.TryGetValue(note.Id, out var node) && _info.TryGetValue(node, out var item))
-            item.Title = EffectiveTitle(note);   // INotifyPropertyChanged refreshes the label
+        var row = _noteRows.FirstOrDefault(r => r.Id == note.Id);
+        if (row is not null)
+        {
+            var t = EffectiveTitle(note);
+            row.Title = string.IsNullOrEmpty(t) ? "(untitled)" : t;
+            row.Subtitle = NoteSubtitle(note);
+            row.Pinned = note.Pinned && _filter != ListFilter.Trash;
+        }
     }
 
     private static string FriendlyDateTime(long ms) =>
@@ -1390,24 +1918,29 @@ public sealed partial class MainWindow : Window
     {
         if (string.IsNullOrEmpty(_settings.Current.AccentColor))
         {
-            // Follow Windows: neutral surfaces (Mica shows through).
+            // Follow Windows: neutral cards floating on the Mica backdrop.
             var layer = (Brush)Application.Current.Resources["LayerFillColorDefaultBrush"];
-            SidebarRoot.Background = layer;
-            ToolbarBar.Background = layer;
+            var alt = (Brush)Application.Current.Resources["LayerFillColorAltBrush"];
+            RailCard.Background = layer;
+            NoteListCard.Background = alt;          // a touch lighter so the list reads apart from the rail
+            ToolbarBar.Background = alt;
+            ContentArea.Background = null;          // gaps between cards show Mica
             ContentRoot.Background = null;
             AppTitleBar.Background = null;
             SidebarSplitter.Background = new SolidColorBrush(Colors.Transparent);
+            RailSplitter.Background = new SolidColorBrush(Colors.Transparent);   // invisible resize grip
             return;
         }
 
         var accent = ParseHex(_settings.Current.AccentColor);
         double m = _settings.Current.ThemeIntensity;   // 0 = none, 1 = default, up to 2
-        Windows.UI.Color desk, chrome;
+        Windows.UI.Color desk, chrome, panel;          // rail = chrome, list = panel, editor desk = desk
         if (IsDarkMode())
         {
-            // Dark themed palette: chrome is the darkest frame, desk a touch lighter, and the
+            // Dark themed palette: chrome is the darkest frame, panel/desk progressively lighter, and the
             // page (PaperBackgroundColor, ~0.18) is the brightest sheet — a proper dark hierarchy.
             chrome = MixColors(DarkBase, accent, 0.10 * m);
+            panel = MixColors(DarkBase, accent, 0.115 * m);
             desk = MixColors(DarkBase, accent, 0.13 * m);
         }
         else
@@ -1416,13 +1949,17 @@ public sealed partial class MainWindow : Window
             // (darkening a near-white page just keeps it near-white — washed out).
             var page = PaperBackgroundColor();
             desk = MixColors(page, accent, 0.07 * m);
+            panel = MixColors(page, accent, 0.11 * m);
             chrome = MixColors(page, accent, 0.15 * m);
         }
-        SidebarRoot.Background = new SolidColorBrush(chrome);
+        RailCard.Background = new SolidColorBrush(chrome);
+        NoteListCard.Background = new SolidColorBrush(panel);
         ToolbarBar.Background = new SolidColorBrush(chrome);
         AppTitleBar.Background = new SolidColorBrush(chrome);
-        ContentRoot.Background = new SolidColorBrush(desk);
-        SidebarSplitter.Background = new SolidColorBrush(chrome);   // blend the gap, no Mica show-through
+        ContentArea.Background = new SolidColorBrush(desk);        // shared desk behind all floating cards
+        ContentRoot.Background = null;                            // editor paper floats on the desk too
+        RailSplitter.Background = new SolidColorBrush(Colors.Transparent);   // invisible resize grip
+        SidebarSplitter.Background = new SolidColorBrush(Colors.Transparent);
     }
 
     // Linear blend from a to b by t (0..1).
@@ -1809,10 +2346,17 @@ public sealed partial class MainWindow : Window
 
     private void CreateAndOpen(NoteType type, string title)
     {
-        var note = _notes.CreateNote(title, type);   // unfiled by default
-        var node = MakeNoteNode(note);
-        _unfiledNode?.Children.Add(node);
-        if (_unfiledNode is not null) _unfiledNode.IsExpanded = true;
+        // Create in the current folder when one is selected, otherwise unfiled.
+        long? folder = _filter == ListFilter.Folder ? _filterId : (long?)null;
+        var note = _notes.CreateNote(title, type, folder);
+
+        // Make sure the new note is visible in the list; if the active filter wouldn't show
+        // it (e.g. a smart folder or trash), fall back to All Notes.
+        bool visible = _filter == ListFilter.AllNotes
+                       || (_filter == ListFilter.Folder && folder == _filterId)
+                       || (_filter == ListFilter.Unfiled && folder is null);
+        if (!visible) { _filter = ListFilter.AllNotes; _filterId = 0; _filterTitle = "All Notes"; _filterQuery = ""; HighlightCurrentFilterNode(); }
+        PopulateNoteList();
         ShowNote(note.Id);
     }
 
@@ -2273,7 +2817,7 @@ public sealed partial class MainWindow : Window
     {
         _dragging = true;
         _dragStartX = e.GetCurrentPoint(null).Position.X;
-        _dragStartWidth = SidebarColumn.ActualWidth;
+        _dragStartWidth = NoteListColumn.ActualWidth;
         ((UIElement)sender).CapturePointer(e.Pointer);
     }
 
@@ -2281,7 +2825,7 @@ public sealed partial class MainWindow : Window
     {
         if (!_dragging) return;
         var dx = e.GetCurrentPoint(null).Position.X - _dragStartX;
-        SidebarColumn.Width = new GridLength(Math.Clamp(_dragStartWidth + dx, 180, 600));
+        NoteListColumn.Width = new GridLength(Math.Clamp(_dragStartWidth + dx, 230, 600));
     }
 
     private void Splitter_PointerReleased(object sender, PointerRoutedEventArgs e)
@@ -2289,8 +2833,118 @@ public sealed partial class MainWindow : Window
         if (!_dragging) return;
         _dragging = false;
         ((UIElement)sender).ReleasePointerCapture(e.Pointer);
-        _settings.Current.SidebarWidth = SidebarColumn.ActualWidth;
+        _settings.Current.SidebarWidth = NoteListColumn.ActualWidth;
         _settings.Save();
+    }
+
+    private bool _railDragging;
+    private double _railStartX;
+    private double _railStartWidth;
+
+    private void RailSplitter_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        _railDragging = true;
+        _railStartX = e.GetCurrentPoint(null).Position.X;
+        _railStartWidth = RailColumn.ActualWidth;
+        ((UIElement)sender).CapturePointer(e.Pointer);
+    }
+
+    private void RailSplitter_PointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_railDragging) return;
+        var dx = e.GetCurrentPoint(null).Position.X - _railStartX;
+        RailColumn.Width = new GridLength(Math.Clamp(_railStartWidth + dx, 150, 360));
+    }
+
+    private void RailSplitter_PointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_railDragging) return;
+        _railDragging = false;
+        ((UIElement)sender).ReleasePointerCapture(e.Pointer);
+        _settings.Current.RailWidth = RailColumn.ActualWidth;
+        _settings.Save();
+    }
+
+    // -------------------------------------------------- Drawer collapse / expand
+    private bool _railOpen = true, _listOpen = true;
+    private double _railSavedWidth = 194, _listSavedWidth = 300;
+
+    private void ToggleRail_Click(object sender, RoutedEventArgs e)
+    {
+        if (_railOpen)
+        {
+            if (RailColumn.ActualWidth > 1) _railSavedWidth = RailColumn.ActualWidth;
+            _railOpen = false;
+            RailColumn.MinWidth = 0;
+            AnimateColumn(RailColumn, RailColumn.ActualWidth, 0, () => RailCard.Visibility = Visibility.Collapsed);
+        }
+        else
+        {
+            _railOpen = true;
+            RailCard.Visibility = Visibility.Visible;
+            AnimateColumn(RailColumn, 0, _railSavedWidth, () => RailColumn.MinWidth = 150);
+        }
+        UpdateDrawerChrome();
+    }
+
+    private void ToggleList_Click(object sender, RoutedEventArgs e)
+    {
+        if (_listOpen)
+        {
+            if (NoteListColumn.ActualWidth > 1) _listSavedWidth = NoteListColumn.ActualWidth;
+            _listOpen = false;
+            NoteListColumn.MinWidth = 0;
+            AnimateColumn(NoteListColumn, NoteListColumn.ActualWidth, 0, () => NoteListCard.Visibility = Visibility.Collapsed);
+        }
+        else
+        {
+            _listOpen = true;
+            NoteListCard.Visibility = Visibility.Visible;
+            AnimateColumn(NoteListColumn, 0, _listSavedWidth, () => NoteListColumn.MinWidth = 230);
+        }
+        UpdateDrawerChrome();
+    }
+
+    // Corner radii, margins, and splitter visibility for the current open/closed combination.
+    private void UpdateDrawerChrome()
+    {
+        RailSplitter.Visibility = (_railOpen && _listOpen) ? Visibility.Visible : Visibility.Collapsed;
+        RailShadowEdge.Visibility = (_railOpen && _listOpen) ? Visibility.Visible : Visibility.Collapsed;
+        SidebarSplitter.Visibility = _listOpen ? Visibility.Visible : Visibility.Collapsed;
+
+        if (_railOpen && _listOpen)
+        {
+            RailCard.CornerRadius = new CornerRadius(8, 0, 0, 8);
+            RailCard.Margin = new Thickness(8, 8, 0, 8);
+            NoteListCard.CornerRadius = new CornerRadius(0, 8, 8, 0);
+            NoteListCard.Margin = new Thickness(0, 8, 2, 8);
+        }
+        else if (_railOpen)          // list hidden — the rail is the whole drawer
+        {
+            RailCard.CornerRadius = new CornerRadius(8);
+            RailCard.Margin = new Thickness(8, 8, 2, 8);
+        }
+        else if (_listOpen)          // rail hidden — the list is the whole drawer
+        {
+            NoteListCard.CornerRadius = new CornerRadius(8);
+            NoteListCard.Margin = new Thickness(8, 8, 2, 8);
+        }
+    }
+
+    // Smoothly animate a grid column's width (GridLength isn't animatable, so step it on a timer).
+    private void AnimateColumn(ColumnDefinition col, double from, double to, Action? onDone = null)
+    {
+        var start = DateTime.Now;
+        var dur = TimeSpan.FromMilliseconds(180);
+        var timer = DispatcherQueue.CreateTimer();
+        timer.Interval = TimeSpan.FromMilliseconds(15);
+        timer.Tick += (_, _) =>
+        {
+            var t = (DateTime.Now - start).TotalMilliseconds / dur.TotalMilliseconds;
+            if (t >= 1) { col.Width = new GridLength(to); timer.Stop(); onDone?.Invoke(); }
+            else { var eased = 1 - Math.Pow(1 - t, 3); col.Width = new GridLength(from + (to - from) * eased); }
+        };
+        timer.Start();
     }
 
     // ================================================================ Settings
@@ -2490,21 +3144,29 @@ public sealed partial class MainWindow : Window
         _focusMode = on;
         if (on)
         {
-            _savedSidebarWidth = SidebarColumn.Width;
-            SidebarColumn.MinWidth = 0;
-            SidebarColumn.Width = new GridLength(0);
-            SidebarRoot.Visibility = Visibility.Collapsed;
+            _savedSidebarWidth = NoteListColumn.Width;
+            RailColumn.MinWidth = 0;
+            RailColumn.Width = new GridLength(0);
+            NoteListColumn.MinWidth = 0;
+            NoteListColumn.Width = new GridLength(0);
+            RailCard.Visibility = Visibility.Collapsed;
+            NoteListCard.Visibility = Visibility.Collapsed;
             SidebarSplitter.Visibility = Visibility.Collapsed;
+            RailSplitter.Visibility = Visibility.Collapsed;
             ToolbarBar.Visibility = Visibility.Collapsed;
             FindBar.Visibility = Visibility.Collapsed;
             FocusExitButton.Visibility = Visibility.Visible;
         }
         else
         {
-            SidebarColumn.MinWidth = 180;
-            SidebarColumn.Width = _savedSidebarWidth.Value > 0 ? _savedSidebarWidth : new GridLength(260);
-            SidebarRoot.Visibility = Visibility.Visible;
+            RailColumn.MinWidth = 150;
+            RailColumn.Width = new GridLength(194);
+            NoteListColumn.MinWidth = 230;
+            NoteListColumn.Width = _savedSidebarWidth.Value > 0 ? _savedSidebarWidth : new GridLength(300);
+            RailCard.Visibility = Visibility.Visible;
+            NoteListCard.Visibility = Visibility.Visible;
             SidebarSplitter.Visibility = Visibility.Visible;
+            RailSplitter.Visibility = Visibility.Visible;
             ToolbarBar.Visibility = Visibility.Visible;
             FocusExitButton.Visibility = Visibility.Collapsed;
         }
@@ -2759,7 +3421,7 @@ public sealed partial class MainWindow : Window
 }
 
 // ---- Sidebar tree node model ----------------------------------------------
-public enum NodeKind { Folder, Note, SmartFolder, Group, Unfiled, Trash, TrashNote }
+public enum NodeKind { Folder, Note, SmartFolder, Group, Unfiled, Trash, TrashNote, AllNotes }
 
 public sealed class NodeItem : System.ComponentModel.INotifyPropertyChanged
 {
@@ -2784,6 +3446,18 @@ public sealed class NodeItem : System.ComponentModel.INotifyPropertyChanged
 
     public string DisplayTitle => string.IsNullOrWhiteSpace(Title) ? "(untitled)" : Title;
     public string DisplayText => $"{(Pinned ? "📌 " : "")}{Glyph} {DisplayTitle}";
+
+    /// <summary>Segoe Fluent glyph for the folder rail (replaces the old emoji).</summary>
+    public string IconGlyph => Kind switch
+    {
+        NodeKind.AllNotes   => "\uE8F1",   // Document / all notes
+        NodeKind.Folder     => "\uE8B7",   // Folder
+        NodeKind.Unfiled    => "\uE7C3",   // Page (loose notes)
+        NodeKind.Group      => "\uE721",   // Search (smart folders header)
+        NodeKind.SmartFolder=> "\uE721",   // Search
+        NodeKind.Trash      => "\uE74D",   // Delete / trash
+        _ => "\uE8B7",
+    };
 
     public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
     private void Raise()

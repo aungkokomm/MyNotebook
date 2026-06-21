@@ -17,6 +17,7 @@ public sealed class AppSettings
     public bool SpellCheck { get; set; } = true;
     public bool QuickNoteHotkey { get; set; } = false;
     public double SidebarWidth { get; set; } = 260;
+    public double RailWidth { get; set; } = 194;
     /// <summary>X button hides to tray (keep running) instead of quitting.</summary>
     public bool CloseToTray { get; set; } = true;
 
