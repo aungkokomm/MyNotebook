@@ -19,7 +19,6 @@
 
 ## ⬇️ Download
 ![GitHub all releases](https://img.shields.io/github/downloads/aungkokomm/MyNotebook/total)
-![GitHub release (latest by date)](https://img.shields.io/github/downloads/aungkokomm/MyNotebook/latest/total)
 
 Head to the [**Releases**](../../releases) page and run the latest
 `MyNotebook_Setup_vX.Y.Z.exe`. It installs **without admin rights**, runs **portable**, and
