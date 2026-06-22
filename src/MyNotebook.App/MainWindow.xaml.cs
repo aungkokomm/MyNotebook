@@ -1241,6 +1241,7 @@ public sealed partial class MainWindow : Window
                 break;
             case "pasted":
                 if (_settings.Current.PasteSourceUrl) _ = AppendPasteSourceAsync();
+                ApplyAutoTitle(m.Text);
                 break;
             case "opennote":
                 if (m.Id > 0) ShowNote(m.Id);
@@ -1653,11 +1654,18 @@ public sealed partial class MainWindow : Window
    if(!im)return;
    im.setAttribute('src',url);im.setAttribute('data-rel',rel);im.removeAttribute('data-tok');save();
  }
+ // Best title guess from current content: first real heading, else the first non-empty line.
+ function autoTitle(){
+   var h=ed.querySelector('h1,h2,h3,h4,h5,h6');
+   var t=(h&&h.innerText)?h.innerText:'';
+   if(!t.trim()){var kids=ed.children;for(var i=0;i<kids.length;i++){var k=(kids[i].innerText||'').trim();if(k){t=k;break;}}if(!t.trim())t=(ed.innerText||'');}
+   return t.replace(/\s+/g,' ').trim().slice(0,120);
+ }
  ed.addEventListener('paste',function(e){
    var cd=e.clipboardData||window.clipboardData;
    // Ctrl+Shift+V: force plain text, ignoring formatting and images.
    if(plainNext){plainNext=false;e.preventDefault();
-     document.execCommand('insertText',false,cd?cd.getData('text'):'');post({type:'pasted'});return;}
+     document.execCommand('insertText',false,cd?cd.getData('text'):'');post({type:'pasted',text:autoTitle()});return;}
    var types=(cd&&cd.types)||[];
    var hasHtml=Array.prototype.indexOf.call(types,'text/html')>=0;
    var items=(cd&&cd.items)||[];
@@ -1685,14 +1693,14 @@ public sealed partial class MainWindow : Window
        }
        document.execCommand('insertHTML',false,box.innerHTML);
        for(var k=0;k<jobs.length;k++)post({type:'pasteimg',src:jobs[k][1],data:jobs[k][0]});
-       post({type:'pasted'});save();return;
+       post({type:'pasted',text:autoTitle()});save();return;
      }
    }
    // Plain text fallback.
    e.preventDefault();
    var txt=cd?cd.getData('text'):'';
    document.execCommand('insertText',false,txt);
-   post({type:'pasted'});
+   post({type:'pasted',text:autoTitle()});
  });
  ed.addEventListener('click',function(e){
    var a=e.target&&e.target.closest?e.target.closest('a'):null;
@@ -1846,6 +1854,18 @@ public sealed partial class MainWindow : Window
         _current.Title = box.Text;
         _notes.UpdateNote(_current);
         UpdateNodeTitle(_current);
+    }
+
+    /// <summary>After a paste into an untitled note, adopt the pasted heading / first line as the title.</summary>
+    private void ApplyAutoTitle(string? candidate)
+    {
+        if (_current is null || _current.Type != NoteType.Note) return;
+        candidate = candidate?.Trim();
+        if (string.IsNullOrEmpty(candidate)) return;
+        var cur = (_current.Title ?? "").Trim();
+        if (cur.Length > 0 && cur != "New note") return;   // never overwrite a real, user-set title
+        if (candidate.Length > 120) candidate = candidate[..120].TrimEnd();
+        TitleBox.Text = candidate;   // TextChanged → SaveCurrentTitle persists it and refreshes the list
     }
 
     /// <summary>Effective title = explicit title, else the first non-empty body line.</summary>

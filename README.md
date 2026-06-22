@@ -66,7 +66,7 @@ If you want a notebook that is **fast, private, genuinely yours, and actually fi
 | | |
 |---|---|
 | 🗂️ **Workspace** | Two-pane drawer (folders + note list), collapsible panels, multi-select + bulk move/pin/delete, drag-to-folder, sort |
-| ✍️ **Editor** | Inline full-res images, **rich web paste** (formatting + images, kept offline), fonts, checklists, page styles |
+| ✍️ **Editor** | Inline full-res images, **rich web paste** (formatting + images, kept offline), **auto-titles a new note from the pasted heading**, fonts, checklists, page styles |
 | 🖼️ **Screenshot threads** | Paste, drag-to-reorder, OCR-indexed, 100% floating viewer, export all |
 | 🔎 **Search** | Hybrid FTS5 + trigram (Myanmar/substring/OCR), operators, highlighted results |
 | 🔗 **Knowledge** | `[[wiki-links]]` + backlinks, OneNote-style web clipper (keeps the source URL) |
