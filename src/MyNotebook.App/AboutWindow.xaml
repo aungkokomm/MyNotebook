@@ -9,7 +9,7 @@
 
     <Grid>
         <ScrollViewer Padding="28" VerticalScrollBarVisibility="Auto">
-            <StackPanel Spacing="16" MaxWidth="460" HorizontalAlignment="Left">
+            <StackPanel x:Name="RootPanel" Spacing="16" MaxWidth="460" HorizontalAlignment="Left">
 
                 <StackPanel Orientation="Horizontal" Spacing="14">
                     <Image x:Name="AppLogo" Width="56" Height="56" VerticalAlignment="Top" />
@@ -18,6 +18,15 @@
                         <TextBlock x:Name="VersionText" Opacity="0.7" />
                     </StackPanel>
                 </StackPanel>
+
+                <!-- The manual-update notice is shown first so it's never below the fold. -->
+                <InfoBar IsOpen="True" IsClosable="False" Severity="Warning"
+                         Title="Updates are manual"
+                         Message="My Notebook does not update itself. To get new features and fixes, open the Releases page and install the latest version over your current one — your notes are never touched.">
+                    <InfoBar.ActionButton>
+                        <Button Content="Check for updates" Click="CheckUpdates_Click" />
+                    </InfoBar.ActionButton>
+                </InfoBar>
 
                 <TextBlock TextWrapping="Wrap" Opacity="0.85"
                            Text="A fast, private, local-first notebook for Windows 11 — rich notes and OCR-searchable screenshot threads, with a Myanmar-aware search. No account, no cloud." />
@@ -28,14 +37,6 @@
                                      Content="github.com/aungkokomm/MyNotebook"
                                      NavigateUri="https://github.com/aungkokomm/MyNotebook" />
                 </StackPanel>
-
-                <InfoBar IsOpen="True" IsClosable="False" Severity="Warning"
-                         Title="Updates are manual"
-                         Message="My Notebook does not update itself. To get new features and fixes, open the Releases page and install the latest version over your current one — your notes are never touched.">
-                    <InfoBar.ActionButton>
-                        <Button Content="Check for updates" Click="CheckUpdates_Click" />
-                    </InfoBar.ActionButton>
-                </InfoBar>
 
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <Button x:Name="ReleasesButton" Content="View all releases" Click="CheckUpdates_Click" />

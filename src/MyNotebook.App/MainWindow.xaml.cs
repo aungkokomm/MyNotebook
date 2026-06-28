@@ -2981,6 +2981,18 @@ public sealed partial class MainWindow : Window
         _settingsWindow.Activate();
     }
 
+    private AboutWindow? _aboutWindow;
+
+    private void AboutFooter_Click(object sender, RoutedEventArgs e)
+    {
+        if (_aboutWindow is null)
+        {
+            _aboutWindow = new AboutWindow();
+            _aboutWindow.Closed += (_, _) => _aboutWindow = null;
+        }
+        _aboutWindow.Activate();
+    }
+
     // Live-apply hooks invoked by the Settings window so changes preview immediately.
     internal void ApplyThemeLive()
     {
@@ -3306,7 +3318,11 @@ public sealed partial class MainWindow : Window
     {
         var s = _settings.Current;
         var presenter = AppWindow.Presenter as Microsoft.UI.Windowing.OverlappedPresenter;
-        if (s.WindowWidth > 0 && s.WindowHeight > 0)
+
+        // Only restore a saved rect when it's a sane size AND actually visible on a connected
+        // display; otherwise fall back to maximized so the window always shows up.
+        if (s.WindowWidth >= 600 && s.WindowHeight >= 400 &&
+            IsRectOnScreen(s.WindowX, s.WindowY, s.WindowWidth, s.WindowHeight))
         {
             AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(s.WindowX, s.WindowY, s.WindowWidth, s.WindowHeight));
             if (s.WindowMaximized) presenter?.Maximize();
@@ -3315,6 +3331,23 @@ public sealed partial class MainWindow : Window
         {
             presenter?.Maximize();
         }
+    }
+
+    /// <summary>True when the rect has a meaningful overlap with some connected display's work area.</summary>
+    private static bool IsRectOnScreen(int x, int y, int w, int h)
+    {
+        try
+        {
+            foreach (var area in Microsoft.UI.Windowing.DisplayArea.FindAll())
+            {
+                var wa = area.WorkArea;
+                int ix = Math.Max(x, wa.X), iy = Math.Max(y, wa.Y);
+                int ax = Math.Min(x + w, wa.X + wa.Width), ay = Math.Min(y + h, wa.Y + wa.Height);
+                if (ax - ix > 120 && ay - iy > 80) return true;   // at least a grabbable slice is visible
+            }
+        }
+        catch { }
+        return false;
     }
 
     private void SaveWindowPlacement()

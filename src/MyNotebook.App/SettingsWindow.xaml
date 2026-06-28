@@ -102,9 +102,12 @@
                 <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
                     <Button x:Name="OpenDataFolderButton" Content="Open data folder" Click="OpenDataFolder_Click" />
                     <Button x:Name="BackupButton" Content="Back up to .zip" Click="Backup_Click" />
+                    <Button x:Name="OpenBackupsButton" Content="Open backups" Click="OpenBackups_Click" />
                     <Button x:Name="ExportAllButton" Content="Export all (Markdown)" Click="ExportAll_Click" />
                     <Button x:Name="EmptyTrashButton" Content="Empty trash" Click="EmptyTrash_Click" />
                 </StackPanel>
+                <TextBlock Opacity="0.6" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
+                           Text="My Notebook automatically keeps the last 10 snapshots of your notes in a Backups folder next to the app. If anything goes wrong, copy the newest notebook_*.db over Data\notebook.db to restore." />
 
                 <TextBlock Text="Search &amp; OCR" FontWeight="SemiBold" Opacity="0.8" Margin="0,16,0,4" />
                 <TextBlock x:Name="OcrStatusText" Opacity="0.8" TextWrapping="Wrap" />
@@ -128,7 +131,14 @@
 
                 <TextBlock Text="About" FontWeight="SemiBold" Opacity="0.8" Margin="0,16,0,4" />
                 <TextBlock x:Name="AboutText" Opacity="0.7" TextWrapping="Wrap" />
-                <Button x:Name="AboutButton" Content="About My Notebook" Click="About_Click" Margin="0,6,0,0" />
+                <InfoBar IsOpen="True" IsClosable="False" Severity="Warning" Margin="0,8,0,0"
+                         Title="Updates are manual"
+                         Message="My Notebook does not update itself. Check the Releases page now and then and install the latest over your current one — your notes are never touched.">
+                    <InfoBar.ActionButton>
+                        <Button Content="Check for updates" Click="CheckUpdates_Click" />
+                    </InfoBar.ActionButton>
+                </InfoBar>
+                <Button x:Name="AboutButton" Content="About My Notebook" Click="About_Click" Margin="0,8,0,0" />
             </StackPanel>
         </ScrollViewer>
     </Grid>

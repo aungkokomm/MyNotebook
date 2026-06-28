@@ -43,6 +43,23 @@ That means:
 > that gets backed up, or take a `.zip` backup now and then. Your notes are *yours* — which also means
 > their safety is in your hands, not a company's servers.
 
+## 🔄 Updates are manual (on purpose)
+
+My Notebook **doesn't update itself** — and that's a deliberate choice, not a missing feature.
+
+Auto-updaters work by silently **downloading and running a new executable** in the background. That's
+exactly the behaviour antivirus engines and **VirusTotal** treat as suspicious, so self-updating apps
+routinely get **false-positive malware flags** and scary SmartScreen warnings. To keep My Notebook
+clean, transparent, and trustworthy, there's simply no auto-update machinery to flag.
+
+Instead, updating is a 30-second manual step:
+1. Open **Settings → About → Check for updates** (or the [Releases](../../releases) page).
+2. Download the latest `MyNotebook_Setup_vX.Y.Z.exe` and run it **over your current install**.
+3. Your `Data/` folder is never touched — all your notes carry straight over.
+
+The app shows a clear in-app reminder of this, and keeps **rolling local backups** of your notes
+(`Data/Backups/`) just in case.
+
 ## 🤔 Why another note app?
 
 Because the popular ones each ask you to give something up:

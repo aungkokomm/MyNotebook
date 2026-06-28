@@ -34,6 +34,9 @@ public interface IStorageService
     /// <summary>Create the DB if missing and apply pending migrations (idempotent).</summary>
     void Initialize();
 
+    /// <summary>Save a timestamped snapshot of the DB to a portable Backups\ folder (keeps the last few).</summary>
+    void BackupOnLaunch();
+
     /// <summary>Open a new connection with foreign keys enabled.</summary>
     Microsoft.Data.Sqlite.SqliteConnection OpenConnection();
 

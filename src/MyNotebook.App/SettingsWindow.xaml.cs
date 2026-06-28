@@ -267,6 +267,17 @@ public sealed partial class SettingsWindow : Window
         catch { }
     }
 
+    private void OpenBackups_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var dir = System.IO.Path.Combine(_paths.DataRoot, "Backups");
+            System.IO.Directory.CreateDirectory(dir);
+            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{dir}\"") { UseShellExecute = true });
+        }
+        catch { }
+    }
+
     private async void EmptyTrash_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new ContentDialog
@@ -371,6 +382,12 @@ public sealed partial class SettingsWindow : Window
             _aboutWindow.Closed += (_, _) => _aboutWindow = null;
         }
         _aboutWindow.Activate();
+    }
+
+    private void CheckUpdates_Click(object sender, RoutedEventArgs e)
+    {
+        try { Process.Start(new ProcessStartInfo("https://github.com/aungkokomm/MyNotebook/releases/latest") { UseShellExecute = true }); }
+        catch { }
     }
 
     // ----------------------------------------------------------- Helpers

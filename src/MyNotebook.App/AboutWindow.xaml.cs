@@ -11,6 +11,7 @@ namespace MyNotebook.App;
 public sealed partial class AboutWindow : Window
 {
     private const string RepoUrl = "https://github.com/aungkokomm/MyNotebook";
+    private readonly Microsoft.UI.Windowing.AppWindow _aw;
 
     public AboutWindow()
     {
@@ -18,16 +19,34 @@ public sealed partial class AboutWindow : Window
 
         Title = "About — My Notebook";
         var id = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(WinRT.Interop.WindowNative.GetWindowHandle(this));
-        var aw = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(id);
-        aw.Resize(new Windows.Graphics.SizeInt32(520, 470));
+        _aw = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(id);
+        if (_aw.Presenter is Microsoft.UI.Windowing.OverlappedPresenter p) p.IsResizable = false;
         var icon = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
         if (System.IO.File.Exists(icon))
         {
-            aw.SetIcon(icon);
+            _aw.SetIcon(icon);
             try { AppLogo.Source = new BitmapImage(new Uri(icon)); } catch { /* logo is optional */ }
         }
 
         VersionText.Text = $"Version {GetAppVersion()}";
+
+        // Size the window to exactly fit its content (no clipping, no scrollbar).
+        RootPanel.Loaded += (_, _) => FitToContent();
+        RootPanel.SizeChanged += (_, _) => FitToContent();
+    }
+
+    private void FitToContent()
+    {
+        try
+        {
+            var scale = RootPanel.XamlRoot?.RasterizationScale ?? 1.0;
+            double widthLogical = RootPanel.MaxWidth + 56;                 // content + ScrollViewer padding
+            double heightLogical = RootPanel.ActualHeight + 56 + 40;       // content + padding + title bar/borders
+            _aw.Resize(new Windows.Graphics.SizeInt32(
+                (int)Math.Round(widthLogical * scale),
+                (int)Math.Round(Math.Clamp(heightLogical, 320, 820) * scale)));
+        }
+        catch { }
     }
 
     private void CheckUpdates_Click(object sender, RoutedEventArgs e) => OpenUrl(RepoUrl + "/releases/latest");

@@ -131,13 +131,25 @@
                             <TextBlock Text="Timeline" />
                         </StackPanel>
                     </Button>
-                    <Button x:Name="SettingsButton" Click="SettingsButton_Click" HorizontalAlignment="Stretch"
-                            Padding="8" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0">
-                        <StackPanel Orientation="Horizontal" Spacing="12">
-                            <FontIcon Glyph="&#xE713;" FontSize="16" />
-                            <TextBlock Text="Settings" />
-                        </StackPanel>
-                    </Button>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Button x:Name="SettingsButton" Grid.Column="0" Click="SettingsButton_Click"
+                                HorizontalAlignment="Stretch" Padding="8" HorizontalContentAlignment="Left"
+                                Background="Transparent" BorderThickness="0">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <FontIcon Glyph="&#xE713;" FontSize="16" />
+                                <TextBlock Text="Settings" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="AboutFooterButton" Grid.Column="1" Click="AboutFooter_Click"
+                                Background="Transparent" BorderThickness="0" Width="36" Height="36"
+                                Padding="0" CornerRadius="6" ToolTipService.ToolTip="About My Notebook">
+                            <FontIcon Glyph="&#xE946;" FontSize="16" />
+                        </Button>
+                    </Grid>
                 </StackPanel>
             </Grid>
             </Border>

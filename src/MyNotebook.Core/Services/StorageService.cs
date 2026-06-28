@@ -10,16 +10,62 @@ namespace MyNotebook.Core.Services;
 public sealed class StorageService : IStorageService
 {
     private const int TargetVersion = 4;
+    private const int KeepBackups = 10;
     private readonly string _connectionString;
+    private readonly IPathService _paths;
 
     public StorageService(IPathService paths)
     {
+        _paths = paths;
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = paths.DbPath,
             Mode = SqliteOpenMode.ReadWriteCreate,
             ForeignKeys = true,
         }.ToString();
+    }
+
+    /// <summary>
+    /// Keep the last <see cref="KeepBackups"/> timestamped snapshots of the database in a
+    /// <c>Backups\</c> folder next to it (portable — stays inside the app's Data folder). A safety
+    /// net against accidental loss. Best-effort: never throws, never blocks startup, and an empty
+    /// database is NOT backed up when good snapshots already exist (so a reset can't evict them).
+    /// </summary>
+    public void BackupOnLaunch()
+    {
+        try
+        {
+            var dir = System.IO.Path.Combine(_paths.DataRoot, "Backups");
+            System.IO.Directory.CreateDirectory(dir);
+            bool hasBackups = System.IO.Directory.GetFiles(dir, "notebook_*.db").Length > 0;
+
+            long liveNotes;
+            using (var con = OpenConnection())
+            using (var cmd = con.CreateCommand())
+            {
+                cmd.CommandText = "SELECT COUNT(*) FROM Notes";
+                liveNotes = Convert.ToInt64(cmd.ExecuteScalar());
+            }
+            if (liveNotes == 0 && hasBackups) return;   // don't let an empty DB overwrite good history
+
+            var dest = System.IO.Path.Combine(dir, $"notebook_{DateTime.Now:yyyy-MM-dd_HHmm}.db");
+            if (!System.IO.File.Exists(dest))
+            {
+                using var src = OpenConnection();
+                using var dst = new SqliteConnection(new SqliteConnectionStringBuilder
+                {
+                    DataSource = dest,
+                    Mode = SqliteOpenMode.ReadWriteCreate,
+                }.ToString());
+                dst.Open();
+                src.BackupDatabase(dst);   // consistent snapshot, includes WAL contents
+            }
+
+            foreach (var old in System.IO.Directory.GetFiles(dir, "notebook_*.db")
+                                   .OrderByDescending(System.IO.Path.GetFileName).Skip(KeepBackups))
+                try { System.IO.File.Delete(old); } catch { }
+        }
+        catch { /* backups are best-effort */ }
     }
 
     public SqliteConnection OpenConnection()

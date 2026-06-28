@@ -53,8 +53,11 @@ public partial class App : Application
         // Create the DB and apply migrations before any UI touches it.
         var paths = provider.GetRequiredService<IPathService>();
         Log($"DataRoot={paths.DataRoot} (portable={paths.IsPortable})");
-        provider.GetRequiredService<IStorageService>().Initialize();
+        var storage = provider.GetRequiredService<IStorageService>();
+        storage.Initialize();
         Log("Storage initialized: " + paths.DbPath);
+        storage.BackupOnLaunch();   // keep rolling timestamped snapshots in Data\Backups\
+        Log("Backup-on-launch done");
         return provider;
     }
 
