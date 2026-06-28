@@ -4,7 +4,7 @@
 ; run in PORTABLE mode (the app writes its Data\ folder next to the exe).
 
 #define MyAppName "My Notebook"
-#define MyAppVersion "1.7.1"
+#define MyAppVersion "1.7.2"
 #define MyAppPublisher "Aung Ko Ko"
 #define MyAppExeName "MyNotebook.App.exe"
 
@@ -52,8 +52,9 @@ Source: "{#SourcePath}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 
 ; Sample data so the app opens pre-populated (10 notes + 10 OCR'd screenshots).
 ; onlyifdoesntexist => never clobbers real data on reinstall.
-Source: "{#SeedDb}";      DestDir: "{app}\Data";                      DestName: "notebook.db"; Flags: onlyifdoesntexist
-Source: "{#SampleData}\*"; DestDir: "{app}\Data\attachments";         Flags: onlyifdoesntexist recursesubdirs createallsubdirs
+; uninsneveruninstall => the user's notes DB + images are kept when the app is uninstalled.
+Source: "{#SeedDb}";      DestDir: "{app}\Data";                      DestName: "notebook.db"; Flags: onlyifdoesntexist uninsneveruninstall
+Source: "{#SampleData}\*"; DestDir: "{app}\Data\attachments";         Flags: onlyifdoesntexist recursesubdirs createallsubdirs uninsneveruninstall
 
 [Icons]
 Name: "{group}\{#MyAppName}";            Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
@@ -64,6 +65,6 @@ Name: "{autodesktop}\{#MyAppName}";      Filename: "{app}\{#MyAppExeName}"; Work
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
-; Remove the app folder on uninstall. NOTE: in portable mode this also removes the
-; user's Data\ (it lives under {app}); acceptable for a test build.
-Type: filesandordirs; Name: "{app}"
+; Uninstall removes the program but KEEPS the user's notes. Only the regenerable
+; WebView2 browser cache is cleaned up; the Data\ folder (notes + images) is left intact.
+Type: filesandordirs; Name: "{app}\WebView2"

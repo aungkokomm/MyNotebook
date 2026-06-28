@@ -24,6 +24,25 @@ Head to the [**Releases**](../../releases) page and run the latest
 `MyNotebook_Setup_vX.Y.Z.exe`. It installs **without admin rights**, runs **portable**, and
 **never touches your data** on upgrade. First launch even comes with a few sample notes.
 
+## 🔒 Where your notes live (and why they're safe)
+
+My Notebook is **fully portable and offline**. Every note, screenshot, tag, and setting is stored
+in a plain **`Data/` folder right next to the app** — no cloud, no account, no database server.
+That means:
+
+- **Uninstalling or re-downloading the app does *not* delete your notes.** The uninstaller removes
+  the program but **leaves your `Data/` folder intact** — reinstall to the same folder and everything
+  is exactly where you left it.
+- **Moving to a new PC?** Copy the app folder (or just its `Data/` folder) across — notes, images,
+  and folders all come with it. You can even run it straight off a USB stick.
+- **Back up anytime** from **Settings → Back up to `.zip`**, or simply copy the `Data/` folder to a
+  USB drive or a cloud-synced folder.
+
+> ⚠️ Because your notes live **only on your machine**, they are as safe as your machine. If your
+> drive fails and you have no copy, they're gone — so keep the app (or its `Data/` folder) somewhere
+> that gets backed up, or take a `.zip` backup now and then. Your notes are *yours* — which also means
+> their safety is in your hands, not a company's servers.
+
 ## 🤔 Why another note app?
 
 Because the popular ones each ask you to give something up:
