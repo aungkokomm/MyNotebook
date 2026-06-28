@@ -53,7 +53,7 @@ routinely get **false-positive malware flags** and scary SmartScreen warnings. T
 clean, transparent, and trustworthy, there's simply no auto-update machinery to flag.
 
 Instead, updating is a 30-second manual step:
-1. Open **Settings → About → Check for updates** (or the [Releases](../../releases) page).
+1. Open **About → Check for updates** (or the [Releases](../../releases) page).
 2. Download the latest `MyNotebook_Setup_vX.Y.Z.exe` and run it **over your current install**.
 3. Your `Data/` folder is never touched — all your notes carry straight over.
 
