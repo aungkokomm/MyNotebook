@@ -1162,6 +1162,18 @@ public sealed partial class MainWindow : Window
         _cards.Clear();
         foreach (var img in _notes.ListImages(noteId))
             _cards.Add(ThreadCard.From(img, _paths.ToAbsolute(img.RelPath)));
+        RenumberCards();
+    }
+
+    /// <summary>Number the timeline nodes 1..N and mark the first/last for rail-line trimming.</summary>
+    private void RenumberCards()
+    {
+        for (int i = 0; i < _cards.Count; i++)
+        {
+            _cards[i].Number = i + 1;
+            _cards[i].IsFirst = i == 0;
+            _cards[i].IsLast = i == _cards.Count - 1;
+        }
     }
 
     // ===================================================== WebView2 HTML editor
@@ -2249,6 +2261,7 @@ public sealed partial class MainWindow : Window
     {
         if (_current is null) return;
         _notes.ReorderImages(_current.Id, _cards.Select(c => c.Id).ToList());
+        RenumberCards();
     }
 
     private async Task DeleteThreadImageAsync(ThreadCard c)
@@ -2394,6 +2407,7 @@ public sealed partial class MainWindow : Window
 
         var img = _notes.AddImage(_current.Id, rel, w, h);
         _cards.Add(ThreadCard.From(img, abs));
+        RenumberCards();
 
         if (_ocr.IsAvailable)
         {
@@ -2675,9 +2689,12 @@ public sealed partial class MainWindow : Window
         // Ctrl+V for the screenshot-thread pane only. ScopeOwner keeps it from firing
         // (and swallowing the keystroke) when the WebView2 note editor has focus — the
         // web editor handles its own paste internally.
-        var paste = new KeyboardAccelerator { Key = VirtualKey.V, Modifiers = VirtualKeyModifiers.Control, ScopeOwner = ThreadPane };
+        // App-wide so it works no matter where focus is — OnPasteAccelerator only acts when a
+        // screenshot thread is open AND the clipboard holds an image, so it never disturbs text
+        // paste (search box, titles) or the WebView2 note editor's own paste.
+        var paste = new KeyboardAccelerator { Key = VirtualKey.V, Modifiers = VirtualKeyModifiers.Control };
         paste.Invoked += (_, e) => OnPasteAccelerator(e);
-        ThreadPane.KeyboardAccelerators.Add(paste);
+        root.KeyboardAccelerators.Add(paste);
 
         // Ctrl+F (and Ctrl+K): jump to the global search box — the universal shortcut.
         Add(root, VirtualKey.F, FocusSearch);
@@ -3522,13 +3539,30 @@ public sealed class NodeItem : System.ComponentModel.INotifyPropertyChanged
 }
 
 // ---- Thread card + search suggestion --------------------------------------
-public sealed class ThreadCard
+public sealed class ThreadCard : System.ComponentModel.INotifyPropertyChanged
 {
     public long Id { get; init; }                     // Images.id (for reorder/delete)
     public string Timestamp { get; init; } = "";
     public string Caption { get; init; } = "";
     public string Path { get; init; } = "";          // absolute path, full-res source
     public BitmapImage Bitmap { get; init; } = new(); // thumbnail (auto-fit in the card)
+
+    // Timeline-rail node state (updated on load / reorder).
+    private int _number;
+    public int Number { get => _number; set { if (_number == value) return; _number = value; Raise(nameof(NumberText)); } }
+    public string NumberText => _number.ToString();
+
+    private bool _isFirst;
+    public bool IsFirst { get => _isFirst; set { if (_isFirst == value) return; _isFirst = value; Raise(nameof(TopLineVisibility)); } }
+
+    private bool _isLast;
+    public bool IsLast { get => _isLast; set { if (_isLast == value) return; _isLast = value; Raise(nameof(BottomLineVisibility)); } }
+
+    public Visibility TopLineVisibility => _isFirst ? Visibility.Collapsed : Visibility.Visible;     // no line above the first node
+    public Visibility BottomLineVisibility => _isLast ? Visibility.Collapsed : Visibility.Visible;   // no line below the last node
+
+    public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+    private void Raise(string n) => PropertyChanged?.Invoke(this, new(n));
 
     public static ThreadCard From(ImageItem img, string absPath) => new()
     {
