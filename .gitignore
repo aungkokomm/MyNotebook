@@ -12,6 +12,9 @@ installer/Output/
 test-results.json
 test-screenshot.png
 
+# Isolated local test build (disposable app + its own Data — never committed)
+testrun/
+
 # WebView2 profile / runtime data created next to the exe
 WebView2/
 

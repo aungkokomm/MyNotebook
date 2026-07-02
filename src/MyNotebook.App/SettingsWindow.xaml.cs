@@ -21,25 +21,30 @@ public sealed partial class SettingsWindow : Window
     private readonly INoteService _notes;
     private readonly IPathService _paths;
     private readonly IOcrService _ocr;
+    private readonly IStorageService _storage;
+    private readonly Microsoft.UI.Windowing.AppWindow _aw;
     private bool _loading;
 
-    public SettingsWindow(MainWindow main, ISettingsService settings, INoteService notes, IPathService paths, IOcrService ocr)
+    public SettingsWindow(MainWindow main, ISettingsService settings, INoteService notes, IPathService paths, IOcrService ocr, IStorageService storage)
     {
         _main = main;
         _settings = settings;
         _notes = notes;
         _paths = paths;
         _ocr = ocr;
+        _storage = storage;
 
         _loading = true;          // suppress control-init coercion (slider Min etc.)
         InitializeComponent();
 
         Title = "Settings — My Notebook";
         var id = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(WinRT.Interop.WindowNative.GetWindowHandle(this));
-        var aw = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(id);
-        aw.Resize(new Windows.Graphics.SizeInt32(640, 760));
+        _aw = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(id);
         var icon = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
-        if (System.IO.File.Exists(icon)) aw.SetIcon(icon);
+        if (System.IO.File.Exists(icon)) _aw.SetIcon(icon);
+
+        // Size the window to exactly fit its content (measured once the layout is ready).
+        SettingsRoot.Loaded += (_, _) => FitToContent();
 
         BuildPageColorSwatches();
         BuildAccentThemeSwatches();
@@ -69,7 +74,27 @@ public sealed partial class SettingsWindow : Window
             ? $"OCR engine ready — language: {_ocr.EngineLanguage}. Text inside screenshots is searchable."
             : "No OCR language pack found. Install one in Windows Settings → Time & language → Language to make screenshot text searchable.";
         RerunOcrButton.IsEnabled = _ocr.IsAvailable;
-        AboutText.Text = $"My Notebook {GetAppVersion()} — local-first notes with OCR-searchable screenshots.";
+    }
+
+    /// <summary>Resize the window to fit its content tightly (clamped to the screen work area).</summary>
+    private void FitToContent()
+    {
+        try
+        {
+            var scale = SettingsRoot.XamlRoot?.RasterizationScale ?? 1.0;
+            SettingsRoot.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+            var d = SettingsRoot.DesiredSize;              // width capped by MaxWidth; height wraps at that width
+            double pad = 22 * 2;                            // ScrollViewer padding
+            double wLogical = d.Width + pad + 4;
+            double hLogical = d.Height + pad + 40;          // + title bar / borders
+            var area = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(
+                _aw.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest);
+            double maxH = area.WorkArea.Height / scale - 48;
+            hLogical = Math.Clamp(hLogical, 240, maxH);
+            _aw.Resize(new Windows.Graphics.SizeInt32(
+                (int)Math.Round(wLogical * scale), (int)Math.Round(hLogical * scale)));
+        }
+        catch { }
     }
 
     // ----------------------------------------------------------- Appearance
@@ -307,13 +332,63 @@ public sealed partial class SettingsWindow : Window
         if (file is null) return;
         try
         {
-            var path = file.Path;
-            if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
-            System.IO.Compression.ZipFile.CreateFromDirectory(
-                _paths.DataRoot, path, System.IO.Compression.CompressionLevel.Optimal, includeBaseDirectory: false);
-            await ShowInfoAsync("Backup complete", $"A full copy of your notebook was saved to:\n{path}");
+            _storage.CreateBackupZip(file.Path);
+            await ShowInfoAsync("Backup complete",
+                $"A restorable copy of your notebook (notes, images, and settings) was saved to:\n{file.Path}\n\n" +
+                "To restore it later, use \"Restore from backup…\" and point to this file.");
         }
         catch (Exception ex) { await ShowInfoAsync("Backup failed", ex.Message); }
+    }
+
+    private async void Restore_Click(object sender, RoutedEventArgs e)
+    {
+        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
+        picker.FileTypeFilter.Add(".zip");
+        picker.FileTypeFilter.Add(".db");
+        InitializeWithWindow(picker);
+        var file = await picker.PickSingleFileAsync();
+        if (file is null) return;
+
+        var (ok, message) = _storage.InspectBackup(file.Path);
+        if (!ok) { await ShowInfoAsync("Can't restore from this file", message); return; }
+
+        var dialog = new ContentDialog
+        {
+            Title = "Restore from backup?",
+            Content = $"{message}\n\nThis replaces ALL of your current notes and images with the backup. " +
+                      "Your current notebook is saved to the Backups folder first, and the app restarts to finish.",
+            PrimaryButtonText = "Restore and restart",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot,
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        try
+        {
+            // Safety net: snapshot the CURRENT notebook (with the live DB still healthy) before staging.
+            var preDir = System.IO.Path.Combine(_paths.DataRoot, "Backups");
+            System.IO.Directory.CreateDirectory(preDir);
+            _storage.CreateBackupZip(System.IO.Path.Combine(preDir, $"pre-restore_{DateTime.Now:yyyy-MM-dd_HHmm}.zip"));
+
+            _storage.StageRestore(file.Path);
+            _storage.ReleaseConnections();
+        }
+        catch (Exception ex)
+        {
+            await ShowInfoAsync("Restore failed", "Nothing was changed. " + ex.Message);
+            return;
+        }
+
+        // Relaunch — the new instance applies the staged restore before opening the database.
+        try
+        {
+            var exe = Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(exe))
+                Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true, WorkingDirectory = AppContext.BaseDirectory });
+        }
+        catch { }
+        Application.Current.Exit();
     }
 
     private async void ExportAll_Click(object sender, RoutedEventArgs e)
@@ -371,25 +446,6 @@ public sealed partial class SettingsWindow : Window
         await ShowInfoAsync("Search index rebuilt", "The full-text search index was rebuilt from your notes.");
     }
 
-    // ----------------------------------------------------------- About
-    private AboutWindow? _aboutWindow;
-
-    private void About_Click(object sender, RoutedEventArgs e)
-    {
-        if (_aboutWindow is null)
-        {
-            _aboutWindow = new AboutWindow();
-            _aboutWindow.Closed += (_, _) => _aboutWindow = null;
-        }
-        _aboutWindow.Activate();
-    }
-
-    private void CheckUpdates_Click(object sender, RoutedEventArgs e)
-    {
-        try { Process.Start(new ProcessStartInfo("https://github.com/aungkokomm/MyNotebook/releases/latest") { UseShellExecute = true }); }
-        catch { }
-    }
-
     // ----------------------------------------------------------- Helpers
     private void RefreshStats()
     {
@@ -424,10 +480,4 @@ public sealed partial class SettingsWindow : Window
     private Task ShowInfoAsync(string title, string message) =>
         new ContentDialog { Title = title, Content = message, CloseButtonText = "OK", XamlRoot = Content.XamlRoot }
             .ShowAsync().AsTask();
-
-    private static string GetAppVersion()
-    {
-        var v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-        return v is null ? "1.0" : $"{v.Major}.{v.Minor}.{v.Build}";
-    }
 }

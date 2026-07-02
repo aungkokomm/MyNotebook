@@ -9,7 +9,7 @@
 
     <Grid>
         <ScrollViewer Padding="22" VerticalScrollBarVisibility="Auto">
-            <StackPanel Spacing="6" MaxWidth="560" HorizontalAlignment="Left">
+            <StackPanel x:Name="SettingsRoot" Spacing="6" MaxWidth="560" HorizontalAlignment="Left">
 
                 <TextBlock Text="Appearance" FontWeight="SemiBold" Opacity="0.8" Margin="0,0,0,4" />
                 <Grid ColumnSpacing="12" Margin="0,0,0,4">
@@ -102,12 +102,13 @@
                 <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
                     <Button x:Name="OpenDataFolderButton" Content="Open data folder" Click="OpenDataFolder_Click" />
                     <Button x:Name="BackupButton" Content="Back up to .zip" Click="Backup_Click" />
+                    <Button x:Name="RestoreButton" Content="Restore from backup…" Click="Restore_Click" />
                     <Button x:Name="OpenBackupsButton" Content="Open backups" Click="OpenBackups_Click" />
                     <Button x:Name="ExportAllButton" Content="Export all (Markdown)" Click="ExportAll_Click" />
                     <Button x:Name="EmptyTrashButton" Content="Empty trash" Click="EmptyTrash_Click" />
                 </StackPanel>
                 <TextBlock Opacity="0.6" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
-                           Text="My Notebook automatically keeps the last 10 snapshots of your notes in a Backups folder next to the app. If anything goes wrong, copy the newest notebook_*.db over Data\notebook.db to restore." />
+                           Text="Back up to .zip saves a restorable copy (notes, images, and settings). Restore from backup replaces your current notebook with a .zip or a notebook_*.db snapshot — your current notes are saved to Backups first, then the app restarts. My Notebook also keeps the last 10 automatic snapshots in the Backups folder next to the app." />
 
                 <TextBlock Text="Search &amp; OCR" FontWeight="SemiBold" Opacity="0.8" Margin="0,16,0,4" />
                 <TextBlock x:Name="OcrStatusText" Opacity="0.8" TextWrapping="Wrap" />
@@ -128,17 +129,6 @@
                               Toggled="QuickNoteToggle_Toggled" />
                 <ToggleSwitch x:Name="PasteSourceToggle" Header="Keep source link when pasting from the web"
                               Toggled="PasteSourceToggle_Toggled" />
-
-                <TextBlock Text="About" FontWeight="SemiBold" Opacity="0.8" Margin="0,16,0,4" />
-                <TextBlock x:Name="AboutText" Opacity="0.7" TextWrapping="Wrap" />
-                <InfoBar IsOpen="True" IsClosable="False" Severity="Warning" Margin="0,8,0,0"
-                         Title="Updates are manual"
-                         Message="My Notebook does not update itself. Check the Releases page now and then and install the latest over your current one — your notes are never touched.">
-                    <InfoBar.ActionButton>
-                        <Button Content="Check for updates" Click="CheckUpdates_Click" />
-                    </InfoBar.ActionButton>
-                </InfoBar>
-                <Button x:Name="AboutButton" Content="About My Notebook" Click="About_Click" Margin="0,8,0,0" />
             </StackPanel>
         </ScrollViewer>
     </Grid>

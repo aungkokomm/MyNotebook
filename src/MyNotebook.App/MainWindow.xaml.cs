@@ -39,6 +39,7 @@ public sealed partial class MainWindow : Window
     private readonly IOcrService _ocr;
     private readonly IPathService _paths;
     private readonly ISettingsService _settings;
+    private readonly IStorageService _storage;
 
     private readonly ObservableCollection<ThreadCard> _cards = new();
     private Note? _current;
@@ -85,12 +86,13 @@ public sealed partial class MainWindow : Window
     private bool _selectMode;                // checkbox (touch) multi-select via the Select button
     private bool _suppressOpen;              // guards programmatic selection from re-opening a note
 
-    public MainWindow(INoteService notes, IOcrService ocr, IPathService paths, ISettingsService settings)
+    public MainWindow(INoteService notes, IOcrService ocr, IPathService paths, ISettingsService settings, IStorageService storage)
     {
         _notes = notes;
         _ocr = ocr;
         _paths = paths;
         _settings = settings;
+        _storage = storage;
 
         InitializeComponent();
 
@@ -1582,8 +1584,31 @@ public sealed partial class MainWindow : Window
      var(--rule,rgba(0,0,0,.08)) calc(1.75em - 1px),var(--rule,rgba(0,0,0,.08)) 1.75em);
      background-position:0 20px;}
  #ed:empty:before{content:attr(data-ph);color:rgba(128,128,128,.65);}
- #ed img{max-width:100%;height:auto;display:block;margin:14px 0;border-radius:4px;cursor:zoom-in;
-     box-shadow:0 1px 5px rgba(0,0,0,.2);}
+ /* Images: no shadow/rounded box (that drew an ugly rectangle behind transparent PNGs).
+    A picture can flow inline, wrap text left/right, or sit as its own block. */
+ #ed img{max-width:100%;height:auto;display:block;margin:16px 0;cursor:default;transition:outline-color .12s ease;}
+ #ed img.i-inline{display:inline-block;margin:0 4px;vertical-align:bottom;}
+ #ed img.i-left{float:left;margin:5px 20px 12px 0;}
+ #ed img.i-right{float:right;margin:5px 0 12px 20px;}
+ #ed img.i-block{display:block;float:none;margin:16px auto;}
+ #ed img:hover{outline:2px solid rgba(47,111,237,.35);outline-offset:2px;}
+ #ed img.sel{outline:2px solid #2f6fed;outline-offset:2px;}
+ /* Floating image toolbar — a clean pill with icon buttons, theme-aware via system colors. */
+ #imgBar{position:fixed;z-index:10001;display:none;align-items:center;gap:1px;background:Canvas;color:CanvasText;
+   border:1px solid rgba(128,128,128,.32);border-radius:11px;box-shadow:0 8px 28px rgba(0,0,0,.24);padding:4px;}
+ #imgBar button{border:0;background:transparent;color:inherit;width:32px;height:30px;padding:0;cursor:pointer;
+   border-radius:7px;display:inline-flex;align-items:center;justify-content:center;}
+ #imgBar button:hover{background:rgba(128,128,128,.16);}
+ #imgBar button.on{background:rgba(47,111,237,.15);color:#2f6fed;}
+ #imgBar button svg{width:17px;height:17px;display:block;stroke:currentColor;stroke-width:1.7;fill:none;
+   stroke-linecap:round;stroke-linejoin:round;}
+ #imgBar .sep{width:1px;height:20px;background:rgba(128,128,128,.28);margin:0 4px;flex:none;}
+ .imghdl{position:fixed;z-index:10000;display:none;width:12px;height:12px;border-radius:50%;background:#fff;
+   border:2px solid #2f6fed;box-shadow:0 1px 4px rgba(0,0,0,.35);box-sizing:border-box;}
+ #imgBadge{position:fixed;z-index:10002;display:none;background:#1f2430;color:#fff;font-size:12px;font-weight:600;
+   padding:5px 9px;border-radius:7px;pointer-events:none;box-shadow:0 3px 12px rgba(0,0,0,.35);white-space:nowrap;}
+ #imgMarker{position:fixed;z-index:10002;display:none;width:3px;border-radius:2px;background:#2f6fed;
+   pointer-events:none;box-shadow:0 0 0 1px rgba(255,255,255,.65);}
  #ed ul,#ed ol{margin:.2em 0 .6em 1.4em;padding-left:1em;}
  #ed li{margin:.15em 0;}
  #ed h1{font-size:1.6em;font-weight:600;line-height:1.25;margin:.6em 0 .3em;}
@@ -1608,6 +1633,21 @@ public sealed partial class MainWindow : Window
  ::highlight(jump){background:#ffd54a;color:#1c1c1c;}
 </style></head><body>
 <div id="ed" contenteditable="true" data-ph="Start typing… (Ctrl+V to paste a screenshot)"></div>
+<div id="imgBar">
+  <button id="wInline" title="Inline with text"><svg viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><rect x="4" y="11" width="8" height="7" rx="1"/><line x1="15" y1="13" x2="20" y2="13"/><line x1="15" y1="17" x2="20" y2="17"/></svg></button>
+  <button id="wLeft" title="Wrap text on the right"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="9" height="9" rx="1"/><line x1="16" y1="8" x2="20" y2="8"/><line x1="16" y1="12" x2="20" y2="12"/><line x1="4" y1="19" x2="20" y2="19"/></svg></button>
+  <button id="wRight" title="Wrap text on the left"><svg viewBox="0 0 24 24"><rect x="11" y="6" width="9" height="9" rx="1"/><line x1="4" y1="8" x2="8" y2="8"/><line x1="4" y1="12" x2="8" y2="12"/><line x1="4" y1="19" x2="20" y2="19"/></svg></button>
+  <button id="wBlock" title="On its own line (centered)"><svg viewBox="0 0 24 24"><rect x="6" y="8" width="12" height="8" rx="1"/><line x1="4" y1="4" x2="20" y2="4"/><line x1="4" y1="20" x2="20" y2="20"/></svg></button>
+  <span class="sep"></span>
+  <button id="bFit" title="Fit to page width"><svg viewBox="0 0 24 24"><path d="M9 6 L5 6 L5 10"/><path d="M15 6 L19 6 L19 10"/><path d="M9 18 L5 18 L5 14"/><path d="M15 18 L19 18 L19 14"/></svg></button>
+  <button id="bView" title="View full size"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><line x1="15.5" y1="15.5" x2="20" y2="20"/></svg></button>
+</div>
+<div class="imghdl" data-c="nw"></div>
+<div class="imghdl" data-c="ne"></div>
+<div class="imghdl" data-c="sw"></div>
+<div class="imghdl" data-c="se"></div>
+<div id="imgBadge"></div>
+<div id="imgMarker"></div>
 <script>
  var ed=document.getElementById('ed');
  var W=window.chrome.webview;
@@ -1720,7 +1760,8 @@ public sealed partial class MainWindow : Window
      if(a.classList.contains('wl')){var id=parseInt(a.getAttribute('data-id'),10);if(id)post({type:'opennote',id:id});}
      else if(a.getAttribute('href')&&a.getAttribute('href')!=='#'){post({type:'openurl',src:a.getAttribute('href')});}
      return;}
-   if(e.target&&e.target.tagName==='IMG'){post({type:'open',src:e.target.getAttribute('data-rel')});return;}
+   if(e.target&&e.target.tagName==='IMG'){selectImg(e.target);return;}
+   deselectImg();   // clicked text/empty space -> drop any image selection
    var r=document.caretRangeFromPoint?document.caretRangeFromPoint(e.clientX,e.clientY):null;
    if(r&&r.startContainer.nodeType===3){
      var n=r.startContainer,v=n.nodeValue,i=r.startOffset;
@@ -1728,6 +1769,139 @@ public sealed partial class MainWindow : Window
        if(v[k]==='☐'||v[k]==='☑'){n.nodeValue=v.substring(0,k)+(v[k]==='☐'?'☑':'☐')+v.substring(k+1);save();return;}
      }
    }
+ });
+ // ---- Image select / resize / wrap / move ------------------------------------------
+ // Images stay in the document flow (so notes still reflow, search, and export cleanly).
+ // Click one to select it: a floating toolbar sets how text wraps (inline / left / right /
+ // own line), four corner handles resize it aspect-locked with a live size badge and soft
+ // snapping, and dragging the picture body moves it to a new spot (a marker shows where).
+ // Wrap is a CSS class and size is an inline width, so both live in the saved HTML.
+ var imgBar=document.getElementById('imgBar'),imgBadge=document.getElementById('imgBadge'),
+     imgMarker=document.getElementById('imgMarker'),selImg=null;
+ var HDL={};
+ [].forEach.call(document.querySelectorAll('.imghdl'),function(h){
+   HDL[h.dataset.c]=h;
+   h.style.cursor=(h.dataset.c==='nw'||h.dataset.c==='se')?'nwse-resize':'nesw-resize';
+ });
+ function colW(){var s=getComputedStyle(ed);return ed.clientWidth-parseFloat(s.paddingLeft)-parseFloat(s.paddingRight);}
+ function wrapOf(img){var c=img.className;return /\bi-inline\b/.test(c)?'inline':/\bi-left\b/.test(c)?'left':/\bi-right\b/.test(c)?'right':'block';}
+ function placeImgUi(){
+   if(selImg&&!ed.contains(selImg)){selImg=null;}        // node went away on reload/delete
+   if(!selImg){imgBar.style.display='none';for(var k in HDL)HDL[k].style.display='none';return;}
+   var r=selImg.getBoundingClientRect();
+   var pos={nw:[r.left,r.top],ne:[r.right,r.top],sw:[r.left,r.bottom],se:[r.right,r.bottom]};
+   for(var c in HDL){HDL[c].style.display='block';HDL[c].style.left=(pos[c][0]-6)+'px';HDL[c].style.top=(pos[c][1]-6)+'px';}
+   imgBar.style.display='flex';
+   var bw=imgBar.offsetWidth||210, bh=imgBar.offsetHeight||38;
+   var left=Math.min(Math.max(6,r.left),window.innerWidth-bw-6);
+   var top=r.top-bh-10; if(top<6)top=Math.min(r.bottom+10,window.innerHeight-bh-6);
+   imgBar.style.left=left+'px';imgBar.style.top=top+'px';
+   var w=wrapOf(selImg);
+   document.getElementById('wInline').classList.toggle('on',w==='inline');
+   document.getElementById('wLeft').classList.toggle('on',w==='left');
+   document.getElementById('wRight').classList.toggle('on',w==='right');
+   document.getElementById('wBlock').classList.toggle('on',w==='block');
+ }
+ function selectImg(img){if(selImg&&selImg!==img)selImg.classList.remove('sel');selImg=img;img.classList.add('sel');placeImgUi();}
+ function deselectImg(){if(selImg){selImg.classList.remove('sel');selImg=null;}imgBadge.style.display='none';placeImgUi();}
+ function setWrap(mode){
+   if(!selImg)return;
+   selImg.classList.remove('i-inline','i-left','i-right','i-block');
+   if(mode==='inline')selImg.classList.add('i-inline');
+   else if(mode==='left')selImg.classList.add('i-left');
+   else if(mode==='right')selImg.classList.add('i-right');
+   else selImg.classList.add('i-block');
+   placeImgUi();save();
+ }
+ document.getElementById('wInline').onclick=function(){setWrap('inline');};
+ document.getElementById('wLeft').onclick=function(){setWrap('left');};
+ document.getElementById('wRight').onclick=function(){setWrap('right');};
+ document.getElementById('wBlock').onclick=function(){setWrap('block');};
+ document.getElementById('bView').onclick=function(){if(selImg)post({type:'open',src:selImg.getAttribute('data-rel')});};
+ function fitWidth(){if(!selImg)return;if(wrapOf(selImg)==='inline'||wrapOf(selImg)==='left'||wrapOf(selImg)==='right')setWrap('block');selImg.style.width='100%';selImg.style.height='';placeImgUi();save();}
+ document.getElementById('bFit').onclick=fitWidth;
+
+ // --- resize from any corner (aspect-locked, soft snap, live badge) ---
+ var rz=null,raf=0;
+ function beginResize(handle,e){
+   if(!selImg)return; e.preventDefault(); e.stopPropagation();
+   var r=selImg.getBoundingClientRect();
+   rz={east:handle.dataset.c.indexOf('e')>=0,left:r.left,right:r.right};
+   handle.setPointerCapture(e.pointerId);
+   imgBadge.style.display='block';
+ }
+ function moveResize(e){
+   if(!rz||!selImg)return;
+   var max=colW(),min=60;
+   var w=rz.east?(e.clientX-rz.left):(rz.right-e.clientX);
+   w=Math.max(min,Math.min(w,max));
+   var snapped=0;
+   [.25,.5,.75,1].forEach(function(f){var t=Math.round(max*f);if(Math.abs(w-t)<14){w=t;snapped=f;}});
+   if(raf)cancelAnimationFrame(raf);
+   raf=requestAnimationFrame(function(){
+     selImg.style.width=Math.round(w)+'px';selImg.style.height='';
+     placeImgUi();
+     imgBadge.style.display='block';
+     imgBadge.textContent=Math.round(w/max*100)+'%'+(snapped?(snapped===1?' · full width':' · snap'):'')+'  ·  '+Math.round(w)+' px';
+     var br=selImg.getBoundingClientRect();
+     imgBadge.style.left=Math.max(6,Math.min(br.left,window.innerWidth-imgBadge.offsetWidth-6))+'px';
+     imgBadge.style.top=Math.max(6,br.top-imgBadge.offsetHeight-8)+'px';
+   });
+ }
+ function endResize(handle,e){if(rz){rz=null;try{handle.releasePointerCapture(e.pointerId);}catch(_){}imgBadge.style.display='none';placeImgUi();save();}}
+ for(var c in HDL){(function(h){
+   h.addEventListener('pointerdown',function(e){beginResize(h,e);});
+   h.addEventListener('pointermove',function(e){moveResize(e);});
+   h.addEventListener('pointerup',function(e){endResize(h,e);});
+   h.addEventListener('dblclick',function(e){e.preventDefault();fitWidth();});   // double-click a handle = fit width
+ })(HDL[c]);}
+
+ // --- drag the picture body to move it within the text (marker shows the drop point) ---
+ ed.addEventListener('dragstart',function(e){if(e.target&&e.target.tagName==='IMG')e.preventDefault();});  // suppress native image drag
+ ed.addEventListener('dblclick',function(e){if(e.target&&e.target.tagName==='IMG'){e.preventDefault();post({type:'open',src:e.target.getAttribute('data-rel')});}});
+ var mv=null;
+ function caretFrom(x,y){
+   var r=document.caretRangeFromPoint?document.caretRangeFromPoint(x,y):null;
+   if(!r&&document.caretPositionFromPoint){var p=document.caretPositionFromPoint(x,y);if(p){r=document.createRange();r.setStart(p.offsetNode,p.offset);}}
+   if(!r)return null;
+   if(selImg&&selImg.contains(r.startContainer))return null;
+   if(!ed.contains(r.startContainer))return null;
+   r.collapse(true);return r;
+ }
+ ed.addEventListener('pointerdown',function(e){
+   if(rz||!e.target||e.target.tagName!=='IMG')return;
+   mv={img:e.target,x:e.clientX,y:e.clientY,pid:e.pointerId,on:false};
+ });
+ document.addEventListener('pointermove',function(e){
+   if(!mv)return;
+   if(!mv.on){
+     if(Math.abs(e.clientX-mv.x)+Math.abs(e.clientY-mv.y)<6)return;
+     mv.on=true; selImg=mv.img; mv.img.classList.remove('sel');
+     imgBar.style.display='none';for(var k in HDL)HDL[k].style.display='none';
+     mv.img.style.opacity='.55';document.body.style.cursor='grabbing';
+   }
+   var r=caretFrom(e.clientX,e.clientY); mv.range=r;
+   if(r){var rc=r.getClientRects()[0]||r.getBoundingClientRect();
+     imgMarker.style.display='block';imgMarker.style.left=rc.left+'px';
+     imgMarker.style.top=rc.top+'px';imgMarker.style.height=(rc.height||20)+'px';}
+   else imgMarker.style.display='none';
+ });
+ document.addEventListener('pointerup',function(){
+   if(!mv)return;
+   if(mv.on){
+     mv.img.style.opacity='';document.body.style.cursor='';imgMarker.style.display='none';
+     if(mv.range){try{mv.range.insertNode(mv.img);}catch(_){}}
+     selectImg(mv.img);save();
+   }
+   mv=null;
+ });
+
+ ed.addEventListener('scroll',placeImgUi,true);
+ window.addEventListener('resize',placeImgUi);
+ ed.addEventListener('input',function(){if(selImg&&!ed.contains(selImg))deselectImg();});
+ document.addEventListener('keydown',function(e){
+   if(selImg&&(e.key==='Escape')){deselectImg();return;}
+   if(selImg&&(e.key==='Delete'||e.key==='Backspace')&&document.activeElement!==ed){e.preventDefault();var g=selImg;deselectImg();g.parentNode&&g.parentNode.removeChild(g);save();}
  });
  document.addEventListener('keydown',function(e){
    if(wlPop){
@@ -1790,6 +1964,7 @@ public sealed partial class MainWindow : Window
  function restore(){if(savedRange){var s=getSelection();s.removeAllRanges();s.addRange(savedRange);}}
  function loadNote(html,o){
    clearTimeout(t);curId=o.id||0;clearJump();
+   selImg=null;placeImgUi();           // drop image selection from the previous note
    ed.innerHTML=html||'';
    ed.spellcheck=!!o.spell;
    document.documentElement.style.setProperty('--rule',o.rule);
@@ -2992,7 +3167,7 @@ public sealed partial class MainWindow : Window
     {
         if (_settingsWindow is null)
         {
-            _settingsWindow = new SettingsWindow(this, _settings, _notes, _paths, _ocr);
+            _settingsWindow = new SettingsWindow(this, _settings, _notes, _paths, _ocr, _storage);
             _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         }
         _settingsWindow.Activate();

@@ -54,6 +54,9 @@ public partial class App : Application
         var paths = provider.GetRequiredService<IPathService>();
         Log($"DataRoot={paths.DataRoot} (portable={paths.IsPortable})");
         var storage = provider.GetRequiredService<IStorageService>();
+        // If the user staged a restore, swap it in BEFORE opening/migrating the DB (no locks yet).
+        try { storage.ApplyPendingRestoreIfAny(); }
+        catch (Exception ex) { Log("ApplyPendingRestore FAILED: " + ex); }
         storage.Initialize();
         Log("Storage initialized: " + paths.DbPath);
         storage.BackupOnLaunch();   // keep rolling timestamped snapshots in Data\Backups\

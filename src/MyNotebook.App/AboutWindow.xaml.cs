@@ -40,11 +40,18 @@ public sealed partial class AboutWindow : Window
         try
         {
             var scale = RootPanel.XamlRoot?.RasterizationScale ?? 1.0;
-            double widthLogical = RootPanel.MaxWidth + 56;                 // content + ScrollViewer padding
-            double heightLogical = RootPanel.ActualHeight + 56 + 40;       // content + padding + title bar/borders
+            RootPanel.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+            var d = RootPanel.DesiredSize;                 // width capped by MaxWidth; height wraps at that width
+            double pad = 28 * 2;                            // ScrollViewer padding
+            double widthLogical = d.Width + pad + 4;
+            double heightLogical = d.Height + pad + 40;     // + title bar / borders
+            var area = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(
+                _aw.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest);
+            double maxH = area.WorkArea.Height / scale - 48;
+            heightLogical = Math.Clamp(heightLogical, 200, maxH);
             _aw.Resize(new Windows.Graphics.SizeInt32(
                 (int)Math.Round(widthLogical * scale),
-                (int)Math.Round(Math.Clamp(heightLogical, 320, 820) * scale)));
+                (int)Math.Round(heightLogical * scale)));
         }
         catch { }
     }

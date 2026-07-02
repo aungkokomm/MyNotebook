@@ -1,4 +1,7 @@
 using System.Reflection;
+using System.IO;
+using System.IO.Compression;
+using System.Text.Json;
 using Microsoft.Data.Sqlite;
 
 namespace MyNotebook.Core.Services;
@@ -66,6 +69,202 @@ public sealed class StorageService : IStorageService
                 try { System.IO.File.Delete(old); } catch { }
         }
         catch { /* backups are best-effort */ }
+    }
+
+    private const string PendingZipName = "_pending_restore.zip";
+    private const string PendingDbName = "_pending_restore.db";
+
+    /// <inheritdoc/>
+    public void CreateBackupZip(string destZipPath)
+    {
+        var staging = Path.Combine(Path.GetTempPath(), "mnb_backup_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(staging);
+        try
+        {
+            // Consistent single-file DB snapshot (checkpoints WAL contents in, so no -wal/-shm needed).
+            var dbOut = Path.Combine(staging, "notebook.db");
+            using (var src = OpenConnection())
+            using (var dst = new SqliteConnection(new SqliteConnectionStringBuilder
+                   { DataSource = dbOut, Mode = SqliteOpenMode.ReadWriteCreate, Pooling = false }.ToString()))
+            {
+                dst.Open();
+                src.BackupDatabase(dst);
+            }   // Pooling=false so the handle to the staging file is released before we zip it.
+
+            var att = Path.Combine(_paths.DataRoot, "attachments");
+            if (Directory.Exists(att)) CopyDir(att, Path.Combine(staging, "attachments"));
+
+            var settings = Path.Combine(_paths.DataRoot, "settings.json");
+            if (File.Exists(settings)) File.Copy(settings, Path.Combine(staging, "settings.json"), true);
+
+            long notes = 0;
+            try
+            {
+                using var con = OpenConnection();
+                using var cmd = con.CreateCommand();
+                cmd.CommandText = "SELECT COUNT(*) FROM Notes WHERE deleted=0";
+                notes = Convert.ToInt64(cmd.ExecuteScalar());
+            }
+            catch { /* manifest count is best-effort */ }
+
+            File.WriteAllText(Path.Combine(staging, "backup-manifest.json"), JsonSerializer.Serialize(new
+            {
+                app = "MyNotebook",
+                kind = "full-backup",
+                createdUtc = DateTime.UtcNow.ToString("o"),
+                schema = SchemaVersion,
+                notes,
+            }));
+
+            var dir = Path.GetDirectoryName(destZipPath);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            if (File.Exists(destZipPath)) File.Delete(destZipPath);
+            ZipFile.CreateFromDirectory(staging, destZipPath, CompressionLevel.Optimal, includeBaseDirectory: false);
+        }
+        finally { try { Directory.Delete(staging, true); } catch { } }
+    }
+
+    /// <inheritdoc/>
+    public (bool ok, string message) InspectBackup(string path)
+    {
+        try
+        {
+            if (path.EndsWith(".db", StringComparison.OrdinalIgnoreCase))
+            {
+                var n = CountNotesInDbFile(path);
+                return n < 0
+                    ? (false, "This .db file could not be read as a My Notebook database.")
+                    : (true, $"Database snapshot with {n} note{(n == 1 ? "" : "s")} (images are kept from your current notebook).");
+            }
+
+            using var zip = ZipFile.OpenRead(path);
+            var hasDb = zip.GetEntry("notebook.db") != null;
+            if (!hasDb) return (false, "This zip does not look like a My Notebook backup — it has no notebook.db inside.");
+
+            var man = zip.GetEntry("backup-manifest.json");
+            if (man != null)
+            {
+                using var s = man.Open();
+                using var doc = JsonDocument.Parse(s);
+                var root = doc.RootElement;
+                long notes = root.TryGetProperty("notes", out var ne) ? ne.GetInt64() : -1;
+                string? created = root.TryGetProperty("createdUtc", out var ce) ? ce.GetString() : null;
+                var when = DateTime.TryParse(created, out var dt) ? dt.ToLocalTime().ToString("f") : "an earlier date";
+                var count = notes >= 0 ? $"{notes} note{(notes == 1 ? "" : "s")}" : "your notes and images";
+                return (true, $"My Notebook backup from {when}, containing {count}.");
+            }
+            return (true, "My Notebook backup (full folder archive).");
+        }
+        catch (Exception ex) { return (false, "Could not read this backup file: " + ex.Message); }
+    }
+
+    /// <inheritdoc/>
+    public void StageRestore(string sourcePath)
+    {
+        var pz = Path.Combine(_paths.DataRoot, PendingZipName);
+        var pd = Path.Combine(_paths.DataRoot, PendingDbName);
+        try { if (File.Exists(pz)) File.Delete(pz); } catch { }
+        try { if (File.Exists(pd)) File.Delete(pd); } catch { }
+        var dest = sourcePath.EndsWith(".db", StringComparison.OrdinalIgnoreCase) ? pd : pz;
+        File.Copy(sourcePath, dest, true);
+    }
+
+    /// <inheritdoc/>
+    public void ApplyPendingRestoreIfAny()
+    {
+        var pz = Path.Combine(_paths.DataRoot, PendingZipName);
+        var pd = Path.Combine(_paths.DataRoot, PendingDbName);
+        bool haveZip = File.Exists(pz);
+        bool haveDb = File.Exists(pd);
+        if (!haveZip && !haveDb) return;
+
+        try
+        {
+            if (haveZip)
+            {
+                var staging = Path.Combine(Path.GetTempPath(), "mnb_restore_" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(staging);
+                try
+                {
+                    ZipFile.ExtractToDirectory(pz, staging, overwriteFiles: true);
+                    var newDb = Path.Combine(staging, "notebook.db");
+                    if (!File.Exists(newDb)) return;   // invalid archive — leave everything untouched
+
+                    ReplaceDbFrom(newDb);
+
+                    var newAtt = Path.Combine(staging, "attachments");
+                    if (Directory.Exists(newAtt))
+                    {
+                        var liveAtt = Path.Combine(_paths.DataRoot, "attachments");
+                        try { if (Directory.Exists(liveAtt)) Directory.Delete(liveAtt, true); } catch { }
+                        CopyDir(newAtt, liveAtt);
+                    }
+
+                    var newSet = Path.Combine(staging, "settings.json");
+                    if (File.Exists(newSet))
+                        try { File.Copy(newSet, Path.Combine(_paths.DataRoot, "settings.json"), true); } catch { }
+                }
+                finally { try { Directory.Delete(staging, true); } catch { } }
+            }
+            else
+            {
+                ReplaceDbFrom(pd);   // db-only restore keeps the current attachments
+            }
+        }
+        finally
+        {
+            // Only clear the pending markers after a completed attempt.
+            try { if (File.Exists(pz)) File.Delete(pz); } catch { }
+            try { if (File.Exists(pd)) File.Delete(pd); } catch { }
+        }
+    }
+
+    /// <inheritdoc/>
+    public void ReleaseConnections() => SqliteConnection.ClearAllPools();
+
+    // Swap the live DB file for a restored one, dropping any stale WAL/SHM sidecars.
+    private void ReplaceDbFrom(string newDb)
+    {
+        SqliteConnection.ClearAllPools();
+        foreach (var suffix in new[] { "-wal", "-shm", "" })
+            TryFile(() => { var p = _paths.DbPath + suffix; if (File.Exists(p)) File.Delete(p); });
+        TryFile(() => File.Copy(newDb, _paths.DbPath, true));
+    }
+
+    private long CountNotesInDbFile(string dbFile)
+    {
+        try
+        {
+            using var con = new SqliteConnection(new SqliteConnectionStringBuilder
+                { DataSource = dbFile, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
+            con.Open();
+            using var cmd = con.CreateCommand();
+            cmd.CommandText = "SELECT COUNT(*) FROM Notes WHERE deleted=0";
+            return Convert.ToInt64(cmd.ExecuteScalar());
+        }
+        catch { return -1; }
+    }
+
+    private static void CopyDir(string from, string to)
+    {
+        Directory.CreateDirectory(to);
+        foreach (var f in Directory.GetFiles(from, "*", SearchOption.AllDirectories))
+        {
+            var dest = Path.Combine(to, Path.GetRelativePath(from, f));
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            File.Copy(f, dest, true);
+        }
+    }
+
+    // Retry a file op a few times — the just-closed process may still be releasing a handle.
+    private static void TryFile(Action op)
+    {
+        for (int i = 0; i < 12; i++)
+        {
+            try { op(); return; }
+            catch { System.Threading.Thread.Sleep(120); }
+        }
+        op();   // final attempt: let it throw so the caller knows it failed
     }
 
     public SqliteConnection OpenConnection()

@@ -37,6 +37,28 @@ public interface IStorageService
     /// <summary>Save a timestamped snapshot of the DB to a portable Backups\ folder (keeps the last few).</summary>
     void BackupOnLaunch();
 
+    /// <summary>
+    /// Write a clean, self-contained, restorable backup to <paramref name="destZipPath"/>: a
+    /// consistent DB snapshot (WAL checkpointed in), the attachments folder, settings.json, and a
+    /// manifest. Excludes the WebView2 cache and the Backups folder itself.
+    /// </summary>
+    void CreateBackupZip(string destZipPath);
+
+    /// <summary>Peek at a backup (.zip or .db) without applying it. Returns whether it is a valid
+    /// My Notebook backup and a human-readable description for a confirmation prompt.</summary>
+    (bool ok, string message) InspectBackup(string path);
+
+    /// <summary>Stage a backup file (.zip or .db) to be applied on the next launch. Does NOT touch
+    /// the live data yet — the swap happens in <see cref="ApplyPendingRestoreIfAny"/> before the DB opens.</summary>
+    void StageRestore(string sourcePath);
+
+    /// <summary>If a restore was staged, swap it into place. MUST be called at startup BEFORE the DB
+    /// is opened or migrated. Safe: leaves the staged file in place if the swap fails.</summary>
+    void ApplyPendingRestoreIfAny();
+
+    /// <summary>Release pooled SQLite handles so the DB file can be replaced (used around restore).</summary>
+    void ReleaseConnections();
+
     /// <summary>Open a new connection with foreign keys enabled.</summary>
     Microsoft.Data.Sqlite.SqliteConnection OpenConnection();
 
