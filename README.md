@@ -24,42 +24,6 @@ Head to the [**Releases**](../../releases) page and run the latest
 `MyNotebook_Setup_vX.Y.Z.exe`. It installs **without admin rights**, runs **portable**, and
 **never touches your data** on upgrade. First launch even comes with a few sample notes.
 
-## 🔒 Where your notes live (and why they're safe)
-
-My Notebook is **fully portable and offline**. Every note, screenshot, tag, and setting is stored
-in a plain **`Data/` folder right next to the app** — no cloud, no account, no database server.
-That means:
-
-- **Uninstalling or re-downloading the app does *not* delete your notes.** The uninstaller removes
-  the program but **leaves your `Data/` folder intact** — reinstall to the same folder and everything
-  is exactly where you left it.
-- **Moving to a new PC?** Copy the app folder (or just its `Data/` folder) across — notes, images,
-  and folders all come with it. You can even run it straight off a USB stick.
-- **Back up anytime** from **Settings → Back up to `.zip`**, or simply copy the `Data/` folder to a
-  USB drive or a cloud-synced folder.
-
-> ⚠️ Because your notes live **only on your machine**, they are as safe as your machine. If your
-> drive fails and you have no copy, they're gone — so keep the app (or its `Data/` folder) somewhere
-> that gets backed up, or take a `.zip` backup now and then. Your notes are *yours* — which also means
-> their safety is in your hands, not a company's servers.
-
-## 🔄 Updates are manual (on purpose)
-
-My Notebook **doesn't update itself** — and that's a deliberate choice, not a missing feature.
-
-Auto-updaters work by silently **downloading and running a new executable** in the background. That's
-exactly the behaviour antivirus engines and **VirusTotal** treat as suspicious, so self-updating apps
-routinely get **false-positive malware flags** and scary SmartScreen warnings. To keep My Notebook
-clean, transparent, and trustworthy, there's simply no auto-update machinery to flag.
-
-Instead, updating is a 30-second manual step:
-1. Open **About → Check for updates** (or the [Releases](../../releases) page).
-2. Download the latest `MyNotebook_Setup_vX.Y.Z.exe` and run it **over your current install**.
-3. Your `Data/` folder is never touched — all your notes carry straight over.
-
-The app shows a clear in-app reminder of this, and keeps **rolling local backups** of your notes
-(`Data/Backups/`) just in case.
-
 ## 🤔 Why another note app?
 
 Because the popular ones each ask you to give something up:
@@ -78,6 +42,20 @@ Because the popular ones each ask you to give something up:
 
 If you want a notebook that is **fast, private, genuinely yours, and actually finds what you wrote**
 — including in Burmese and inside screenshots — that gap is the reason this exists.
+
+## 🖼️ Screenshots
+
+<p align="center">
+ <img width="960" height="509" alt="image" src="https://github.com/user-attachments/assets/b19c7221-955b-4a22-9482-fd2f8acf2096" />
+
+<img width="960" height="510" alt="image" src="https://github.com/user-attachments/assets/084f4d92-a1ec-4f5f-9a2b-56d6bde6cd4c" />
+
+
+<img width="464" height="401" alt="image" src="https://github.com/user-attachments/assets/3a069e2a-129d-40d9-a4d0-49f36948c153" />
+
+<img width="446" height="383" alt="image" src="https://github.com/user-attachments/assets/e5de20d1-087f-4de3-acdb-4e0b80f9bdb8" />
+
+
 
 ## ✨ Why you'll like it
 
@@ -113,19 +91,41 @@ If you want a notebook that is **fast, private, genuinely yours, and actually fi
 | 🕓 **Timeline** | Browse every note by date — grouped into Today/Yesterday/this month/older, with zoom-out to jump between periods |
 | ⚡ **Polish** | Focus mode, pin/tag/move, close-to-tray, global Quick Note hotkey, settings window |
 
-## 🖼️ Screenshots
+## 🔒 Where your notes live (and why they're safe)
 
-<p align="center">
- <img width="960" height="509" alt="image" src="https://github.com/user-attachments/assets/b19c7221-955b-4a22-9482-fd2f8acf2096" />
+My Notebook is **fully portable and offline**. Every note, screenshot, tag, and setting is stored
+in a plain **`Data/` folder right next to the app** — no cloud, no account, no database server.
+That means:
 
-<img width="960" height="510" alt="image" src="https://github.com/user-attachments/assets/084f4d92-a1ec-4f5f-9a2b-56d6bde6cd4c" />
+- **Uninstalling or re-downloading the app does *not* delete your notes.** The uninstaller removes
+  the program but **leaves your `Data/` folder intact** — reinstall to the same folder and everything
+  is exactly where you left it.
+- **Moving to a new PC?** Copy the app folder (or just its `Data/` folder) across — notes, images,
+  and folders all come with it. You can even run it straight off a USB stick.
+- **Back up anytime** from **Settings → Back up to `.zip`**, or simply copy the `Data/` folder to a
+  USB drive or a cloud-synced folder.
 
+> ⚠️ Because your notes live **only on your machine**, they are as safe as your machine. If your
+> drive fails and you have no copy, they're gone — so keep the app (or its `Data/` folder) somewhere
+> that gets backed up, or take a `.zip` backup now and then. Your notes are *yours* — which also means
+> their safety is in your hands, not a company's servers.
 
-<img width="464" height="401" alt="image" src="https://github.com/user-attachments/assets/3a069e2a-129d-40d9-a4d0-49f36948c153" />
+## 🔄 Updates are manual (on purpose)
 
-<img width="446" height="383" alt="image" src="https://github.com/user-attachments/assets/e5de20d1-087f-4de3-acdb-4e0b80f9bdb8" />
+My Notebook **doesn't update itself** — and that's a deliberate choice, not a missing feature.
 
+Auto-updaters work by silently **downloading and running a new executable** in the background. That's
+exactly the behaviour antivirus engines and **VirusTotal** treat as suspicious, so self-updating apps
+routinely get **false-positive malware flags** and scary SmartScreen warnings. To keep My Notebook
+clean, transparent, and trustworthy, there's simply no auto-update machinery to flag.
 
+Instead, updating is a 30-second manual step:
+1. Open **About → Check for updates** (or the [Releases](../../releases) page).
+2. Download the latest `MyNotebook_Setup_vX.Y.Z.exe` and run it **over your current install**.
+3. Your `Data/` folder is never touched — all your notes carry straight over.
+
+The app shows a clear in-app reminder of this, and keeps **rolling local backups** of your notes
+(`Data/Backups/`) just in case.
 
 </p>
 
