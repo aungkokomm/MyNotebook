@@ -445,6 +445,12 @@
                             <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Strikethrough" Click="Strike_Click">
                                 <FontIcon Glyph="&#xEDE0;" FontSize="15" />
                             </Button>
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Superscript" Click="Super_Click">
+                                <TextBlock Text="x&#x00B2;" FontSize="13" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                            </Button>
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Subscript" Click="Sub_Click">
+                                <TextBlock Text="x&#x2082;" FontSize="13" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                            </Button>
                             <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Text color">
                                 <FontIcon Glyph="&#xE8D3;" FontSize="15" />
                                 <Button.Flyout>
@@ -460,30 +466,48 @@
                             <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Highlight" Click="Highlight_Click">
                                 <FontIcon Glyph="&#xE891;" FontSize="15" />
                             </Button>
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Clear formatting" Click="ClearFormat_Click">
+                                <TextBlock Text="T&#x2715;" FontSize="13" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                            </Button>
                             <Rectangle Style="{StaticResource FmtSeparator}" />
-                            <!-- More formatting: alignment, indent, super/subscript, clear -->
-                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="More formatting">
-                                <FontIcon Glyph="&#xE712;" FontSize="15" />
-                                <Button.Flyout>
-                                    <MenuFlyout>
-                                        <MenuFlyoutItem Text="Align left" Click="AlignLeft_Click" />
-                                        <MenuFlyoutItem Text="Align center" Click="AlignCenter_Click" />
-                                        <MenuFlyoutItem Text="Align right" Click="AlignRight_Click" />
-                                        <MenuFlyoutItem Text="Justify" Click="AlignJustify_Click" />
-                                        <MenuFlyoutSeparator />
-                                        <MenuFlyoutItem Text="Increase indent" Click="Indent_Click" />
-                                        <MenuFlyoutItem Text="Decrease indent" Click="Outdent_Click" />
-                                        <MenuFlyoutSeparator />
-                                        <MenuFlyoutItem Text="Superscript" Click="Super_Click" />
-                                        <MenuFlyoutItem Text="Subscript" Click="Sub_Click" />
-                                        <MenuFlyoutSeparator />
-                                        <MenuFlyoutItem Text="Clear formatting" Click="ClearFormat_Click" />
-                                    </MenuFlyout>
-                                </Button.Flyout>
+                            <!-- Note tools -->
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Linked references (backlinks)" Click="LinksButton_Click">
+                                <FontIcon Glyph="&#xE8A5;" FontSize="15" />
+                            </Button>
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Focus mode (F11)" Click="FocusMode_Click">
+                                <FontIcon Glyph="&#xE740;" FontSize="15" />
+                            </Button>
+                            <Button x:Name="ReadAloudButton" Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Read aloud" Click="ReadAloud_Click">
+                                <FontIcon x:Name="ReadAloudIcon" Glyph="&#xE767;" FontSize="15" />
+                            </Button>
+                            <Button x:Name="RecordButton" Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Record audio" Click="RecordAudio_Click">
+                                <FontIcon x:Name="RecordIcon" Glyph="&#xE720;" FontSize="15" />
                             </Button>
                         </StackPanel>
-                        <!-- Row 2: structure & insert -->
+                        <!-- Row 2: paragraph, structure & insert -->
                         <StackPanel Orientation="Horizontal" Spacing="1" VerticalAlignment="Center">
+                            <!-- Alignment -->
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Align left" Click="AlignLeft_Click">
+                                <FontIcon Glyph="&#xE8E4;" FontSize="15" />
+                            </Button>
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Align center" Click="AlignCenter_Click">
+                                <FontIcon Glyph="&#xE8E3;" FontSize="15" />
+                            </Button>
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Align right" Click="AlignRight_Click">
+                                <FontIcon Glyph="&#xE8E2;" FontSize="15" />
+                            </Button>
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Justify" Click="AlignJustify_Click">
+                                <TextBlock Text="&#x2261;" FontSize="16" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                            </Button>
+                            <Rectangle Style="{StaticResource FmtSeparator}" />
+                            <!-- Indent -->
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Increase indent" Click="Indent_Click">
+                                <TextBlock Text="&#x21E5;" FontSize="15" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                            </Button>
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Decrease indent" Click="Outdent_Click">
+                                <TextBlock Text="&#x21E4;" FontSize="15" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                            </Button>
+                            <Rectangle Style="{StaticResource FmtSeparator}" />
                             <!-- Lists -->
                             <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Bullet list" Click="Bullets_Click">
                                 <FontIcon Glyph="&#xE8FD;" FontSize="15" />
@@ -534,20 +558,6 @@
                                         <MenuFlyoutItem Text="Table 5 rows &#xD7; 2 cols" Tag="5x2" Click="Table_Click" />
                                     </MenuFlyout>
                                 </Button.Flyout>
-                            </Button>
-                            <Rectangle Style="{StaticResource FmtSeparator}" />
-                            <!-- Tools -->
-                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Linked references (backlinks)" Click="LinksButton_Click">
-                                <FontIcon Glyph="&#xE8A5;" FontSize="15" />
-                            </Button>
-                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Focus mode (F11)" Click="FocusMode_Click">
-                                <FontIcon Glyph="&#xE740;" FontSize="15" />
-                            </Button>
-                            <Button x:Name="ReadAloudButton" Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Read aloud" Click="ReadAloud_Click">
-                                <FontIcon x:Name="ReadAloudIcon" Glyph="&#xE767;" FontSize="15" />
-                            </Button>
-                            <Button x:Name="RecordButton" Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Record audio" Click="RecordAudio_Click">
-                                <FontIcon x:Name="RecordIcon" Glyph="&#xE720;" FontSize="15" />
                             </Button>
                         </StackPanel>
                       </StackPanel>
