@@ -37,14 +37,14 @@ public sealed partial class SettingsWindow : Window
         _loading = true;          // suppress control-init coercion (slider Min etc.)
         InitializeComponent();
 
-        Title = "Settings — My Notebook";
+        Title = Loc.T("settings.title");
         var id = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(WinRT.Interop.WindowNative.GetWindowHandle(this));
         _aw = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(id);
         var icon = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
         if (System.IO.File.Exists(icon)) _aw.SetIcon(icon);
 
-        // Size the window to exactly fit its content (measured once the layout is ready).
-        SettingsRoot.Loaded += (_, _) => FitToContent();
+        // Translate the tagged controls, then size the window to exactly fit its content.
+        SettingsRoot.Loaded += (_, _) => { L.Apply(SettingsRoot); FitToContent(); };
 
         BuildPageColorSwatches();
         BuildAccentThemeSwatches();
@@ -65,15 +65,44 @@ public sealed partial class SettingsWindow : Window
         PasteSourceToggle.IsOn = _settings.Current.PasteSourceUrl;
         PaperLinesToggle.IsOn = _settings.Current.PaperLines;
         SelectComboByTag(PaperTypeCombo, _settings.Current.PaperType.ToString());
+        SelectComboByTag(LanguageCombo, _settings.Current.Language);
         UpdateSwatchSelection();
         UpdateAccentSelection();
 
         RefreshStats();
-        DataPathText.Text = (_paths.IsPortable ? "Portable (next to the app): " : "User data folder: ") + _paths.DataRoot;
+        DataPathText.Text = (_paths.IsPortable ? Loc.T("settings.datapath.portable") : Loc.T("settings.datapath.user")) + _paths.DataRoot;
         OcrStatusText.Text = _ocr.IsAvailable
-            ? $"OCR engine ready — language: {_ocr.EngineLanguage}. Text inside screenshots is searchable."
-            : "No OCR language pack found. Install one in Windows Settings → Time & language → Language to make screenshot text searchable.";
+            ? Loc.T("settings.ocr.ready", _ocr.EngineLanguage ?? "")
+            : Loc.T("settings.ocr.none");
         RerunOcrButton.IsEnabled = _ocr.IsAvailable;
+    }
+
+    private async void LanguageCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading) return;
+        var tag = (LanguageCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "";
+        if (tag == _settings.Current.Language) return;
+        _settings.Current.Language = tag;
+        _settings.Save();
+
+        var dlg = new ContentDialog
+        {
+            Title = Loc.T("settings.langchange.title"),
+            Content = Loc.T("settings.langchange.msg"),
+            PrimaryButtonText = Loc.T("settings.langchange.restart"),
+            CloseButtonText = Loc.T("common.cancel"),
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot,
+        };
+        if (await dlg.ShowAsync() != ContentDialogResult.Primary) return;
+        try
+        {
+            var exe = Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(exe))
+                Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true, WorkingDirectory = AppContext.BaseDirectory });
+        }
+        catch { }
+        Application.Current.Exit();
     }
 
     /// <summary>Resize the window to fit its content tightly (clamped to the screen work area).</summary>
@@ -450,7 +479,7 @@ public sealed partial class SettingsWindow : Window
     private void RefreshStats()
     {
         var s = _notes.GetStats();
-        StatsText.Text = $"{s.Notes} notes · {s.Threads} screenshot threads · {s.Images} images · {s.DeletedNotes} in trash.";
+        StatsText.Text = Loc.T("settings.stats", s.Notes, s.Threads, s.Images, s.DeletedNotes);
     }
 
     private static void SelectComboByTag(ComboBox combo, string tag)

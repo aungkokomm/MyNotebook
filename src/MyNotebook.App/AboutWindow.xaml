@@ -3,6 +3,7 @@
     x:Class="MyNotebook.App.AboutWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:l="using:MyNotebook.App"
     mc:Ignorable="d"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">
@@ -20,16 +21,16 @@
                 </StackPanel>
 
                 <!-- The manual-update notice is shown first so it's never below the fold. -->
-                <InfoBar IsOpen="True" IsClosable="False" Severity="Warning"
+                <InfoBar x:Name="UpdatesBar" IsOpen="True" IsClosable="False" Severity="Warning"
                          Title="Updates are manual"
-                         Message="My Notebook does not update itself. To get new features and fixes, open the Releases page and install the latest version over your current one — your notes are never touched.">
+                         Message="My Notebook does not update itself.">
                     <InfoBar.ActionButton>
-                        <Button Content="Check for updates" Click="CheckUpdates_Click" />
+                        <Button l:L.Key="about.updates.check" Content="Check for updates" Click="CheckUpdates_Click" />
                     </InfoBar.ActionButton>
                 </InfoBar>
 
-                <TextBlock TextWrapping="Wrap" Opacity="0.85"
-                           Text="A fast, private, local-first notebook for Windows 11 — rich notes and OCR-searchable screenshot threads, with a Myanmar-aware search. No account, no cloud." />
+                <TextBlock l:L.Key="about.desc" TextWrapping="Wrap" Opacity="0.85"
+                           Text="A fast, private, local-first notebook for Windows 11: rich notes and OCR-searchable screenshot threads, with a Myanmar-aware search. No account, no cloud." />
 
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                     <FontIcon Glyph="&#xE71B;" FontSize="14" Opacity="0.8" />
@@ -39,11 +40,11 @@
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button x:Name="ReleasesButton" Content="View all releases" Click="CheckUpdates_Click" />
-                    <Button x:Name="IssuesButton" Content="Report an issue" Click="Issues_Click" />
+                    <Button x:Name="ReleasesButton" l:L.Key="about.releases" Content="View all releases" Click="CheckUpdates_Click" />
+                    <Button x:Name="IssuesButton" l:L.Key="about.issues" Content="Report an issue" Click="Issues_Click" />
                 </StackPanel>
 
-                <TextBlock Opacity="0.55" FontSize="12" TextWrapping="Wrap"
+                <TextBlock l:L.Key="about.license" Opacity="0.55" FontSize="12" TextWrapping="Wrap"
                            Text="© 2026 Aung Ko Ko · MIT licensed" />
             </StackPanel>
         </ScrollViewer>

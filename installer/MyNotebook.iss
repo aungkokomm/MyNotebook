@@ -4,7 +4,7 @@
 ; run in PORTABLE mode (the app writes its Data\ folder next to the exe).
 
 #define MyAppName "My Notebook"
-#define MyAppVersion "1.8.0"
+#define MyAppVersion "1.8.1"
 #define MyAppPublisher "Aung Ko Ko"
 #define MyAppExeName "MyNotebook.App.exe"
 

@@ -3,6 +3,7 @@
     x:Class="MyNotebook.App.SettingsWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:l="using:MyNotebook.App"
     mc:Ignorable="d"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">
@@ -11,18 +12,18 @@
         <ScrollViewer Padding="22" VerticalScrollBarVisibility="Auto">
             <StackPanel x:Name="SettingsRoot" Spacing="6" MaxWidth="560" HorizontalAlignment="Left">
 
-                <TextBlock Text="Appearance" FontWeight="SemiBold" Opacity="0.8" Margin="0,0,0,4" />
+                <TextBlock l:L.Key="settings.appearance" Text="Appearance" FontWeight="SemiBold" Opacity="0.8" Margin="0,0,0,4" />
                 <Grid ColumnSpacing="12" Margin="0,0,0,4">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="Theme" VerticalAlignment="Center" />
+                    <TextBlock l:L.Key="settings.theme" Grid.Column="0" Text="Theme" VerticalAlignment="Center" />
                     <ComboBox x:Name="ThemeCombo" Grid.Column="1" MinWidth="160"
                               SelectionChanged="ThemeCombo_SelectionChanged">
-                        <ComboBoxItem Content="Follow Windows" Tag="System" />
-                        <ComboBoxItem Content="Light" Tag="Light" />
-                        <ComboBoxItem Content="Dark" Tag="Dark" />
+                        <ComboBoxItem l:L.Key="settings.theme.system" Content="Follow Windows" Tag="System" />
+                        <ComboBoxItem l:L.Key="settings.theme.light" Content="Light" Tag="Light" />
+                        <ComboBoxItem l:L.Key="settings.theme.dark" Content="Dark" Tag="Dark" />
                     </ComboBox>
                 </Grid>
                 <Grid ColumnSpacing="12" Margin="0,0,0,4">
@@ -30,12 +31,25 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="Window background" VerticalAlignment="Center" />
+                    <TextBlock l:L.Key="settings.language" Grid.Column="0" Text="Language" VerticalAlignment="Center" />
+                    <ComboBox x:Name="LanguageCombo" Grid.Column="1" MinWidth="160"
+                              SelectionChanged="LanguageCombo_SelectionChanged">
+                        <ComboBoxItem l:L.Key="settings.language.system" Content="Follow Windows" Tag="" />
+                        <ComboBoxItem Content="English" Tag="en" />
+                        <ComboBoxItem Content="Português" Tag="pt" />
+                    </ComboBox>
+                </Grid>
+                <Grid ColumnSpacing="12" Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock l:L.Key="settings.windowbg" Grid.Column="0" Text="Window background" VerticalAlignment="Center" />
                     <ComboBox x:Name="BackdropCombo" Grid.Column="1" MinWidth="160"
                               SelectionChanged="BackdropCombo_SelectionChanged">
                         <ComboBoxItem Content="Mica" Tag="Mica" />
-                        <ComboBoxItem Content="Acrylic" Tag="Acrylic" />
-                        <ComboBoxItem Content="Solid" Tag="Solid" />
+                        <ComboBoxItem l:L.Key="settings.backdrop.acrylic" Content="Acrylic" Tag="Acrylic" />
+                        <ComboBoxItem l:L.Key="settings.backdrop.solid" Content="Solid" Tag="Solid" />
                     </ComboBox>
                 </Grid>
                 <Grid ColumnSpacing="12">
@@ -43,13 +57,13 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="Editor font size" VerticalAlignment="Center" />
+                    <TextBlock l:L.Key="settings.fontsize" Grid.Column="0" Text="Editor font size" VerticalAlignment="Center" />
                     <Slider x:Name="FontSizeSlider" Grid.Column="1" Minimum="11" Maximum="24"
                             Width="160" ValueChanged="FontSizeSlider_ValueChanged" />
                 </Grid>
 
-                <TextBlock Text="Color theme" Margin="0,8,0,2" />
-                <TextBlock Text="Sets the accent and a matching page color together."
+                <TextBlock l:L.Key="settings.colortheme" Text="Color theme" Margin="0,8,0,2" />
+                <TextBlock l:L.Key="settings.colortheme.desc" Text="Sets the accent and a matching page color together."
                            Opacity="0.6" FontSize="12" Margin="0,0,0,6" />
                 <ItemsControl x:Name="AccentThemeList">
                     <ItemsControl.ItemsPanel>
@@ -63,30 +77,30 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="Color intensity" VerticalAlignment="Center" />
+                    <TextBlock l:L.Key="settings.intensity" Grid.Column="0" Text="Color intensity" VerticalAlignment="Center" />
                     <Slider x:Name="IntensitySlider" Grid.Column="1" Width="160"
                             Minimum="0" Maximum="200" StepFrequency="10"
                             ValueChanged="IntensitySlider_ValueChanged" />
                 </Grid>
 
-                <TextBlock Text="Note paper" FontWeight="SemiBold" Opacity="0.8" Margin="0,16,0,4" />
-                <ToggleSwitch x:Name="PaperLinesToggle" Header="Faint rule lines on the page"
+                <TextBlock l:L.Key="settings.paper" Text="Note paper" FontWeight="SemiBold" Opacity="0.8" Margin="0,16,0,4" />
+                <ToggleSwitch x:Name="PaperLinesToggle" l:L.Key="settings.paper.lines" Header="Faint rule lines on the page"
                               Toggled="PaperLinesToggle_Toggled" />
                 <Grid ColumnSpacing="12" Margin="0,4,0,4">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="Paper type" VerticalAlignment="Center" />
+                    <TextBlock l:L.Key="settings.paper.type" Grid.Column="0" Text="Paper type" VerticalAlignment="Center" />
                     <ComboBox x:Name="PaperTypeCombo" Grid.Column="1" MinWidth="160"
                               SelectionChanged="PaperTypeCombo_SelectionChanged">
-                        <ComboBoxItem Content="Ruled" Tag="Ruled" />
-                        <ComboBoxItem Content="Grid" Tag="Grid" />
-                        <ComboBoxItem Content="Dotted" Tag="Dotted" />
-                        <ComboBoxItem Content="Notebook (ruled + margin)" Tag="Notebook" />
+                        <ComboBoxItem l:L.Key="settings.paper.ruled" Content="Ruled" Tag="Ruled" />
+                        <ComboBoxItem l:L.Key="settings.paper.grid" Content="Grid" Tag="Grid" />
+                        <ComboBoxItem l:L.Key="settings.paper.dotted" Content="Dotted" Tag="Dotted" />
+                        <ComboBoxItem l:L.Key="settings.paper.notebook" Content="Notebook (ruled + margin)" Tag="Notebook" />
                     </ComboBox>
                 </Grid>
-                <TextBlock Text="Page color" Margin="0,4,0,2" />
+                <TextBlock l:L.Key="settings.pagecolor" Text="Page color" Margin="0,4,0,2" />
                 <ItemsControl x:Name="PageColorList">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -95,39 +109,39 @@
                     </ItemsControl.ItemsPanel>
                 </ItemsControl>
 
-                <TextBlock Text="Data &amp; storage" FontWeight="SemiBold" Opacity="0.8" Margin="0,16,0,4" />
+                <TextBlock l:L.Key="settings.data" Text="Data &amp; storage" FontWeight="SemiBold" Opacity="0.8" Margin="0,16,0,4" />
                 <TextBlock x:Name="StatsText" Opacity="0.8" TextWrapping="Wrap" />
                 <TextBlock x:Name="DataPathText" Opacity="0.6" FontSize="12" TextWrapping="Wrap"
                            IsTextSelectionEnabled="True" />
                 <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
-                    <Button x:Name="OpenDataFolderButton" Content="Open data folder" Click="OpenDataFolder_Click" />
-                    <Button x:Name="BackupButton" Content="Back up to .zip" Click="Backup_Click" />
-                    <Button x:Name="RestoreButton" Content="Restore from backup…" Click="Restore_Click" />
-                    <Button x:Name="OpenBackupsButton" Content="Open backups" Click="OpenBackups_Click" />
-                    <Button x:Name="ExportAllButton" Content="Export all (Markdown)" Click="ExportAll_Click" />
-                    <Button x:Name="EmptyTrashButton" Content="Empty trash" Click="EmptyTrash_Click" />
+                    <Button x:Name="OpenDataFolderButton" l:L.Key="settings.data.open" Content="Open data folder" Click="OpenDataFolder_Click" />
+                    <Button x:Name="BackupButton" l:L.Key="settings.data.backup" Content="Back up to .zip" Click="Backup_Click" />
+                    <Button x:Name="RestoreButton" l:L.Key="settings.data.restore" Content="Restore from backup…" Click="Restore_Click" />
+                    <Button x:Name="OpenBackupsButton" l:L.Key="settings.data.openbackups" Content="Open backups" Click="OpenBackups_Click" />
+                    <Button x:Name="ExportAllButton" l:L.Key="settings.data.exportall" Content="Export all (Markdown)" Click="ExportAll_Click" />
+                    <Button x:Name="EmptyTrashButton" l:L.Key="settings.data.emptytrash" Content="Empty trash" Click="EmptyTrash_Click" />
                 </StackPanel>
-                <TextBlock Opacity="0.6" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
-                           Text="Back up to .zip saves a restorable copy (notes, images, and settings). Restore from backup replaces your current notebook with a .zip or a notebook_*.db snapshot — your current notes are saved to Backups first, then the app restarts. My Notebook also keeps the last 10 automatic snapshots in the Backups folder next to the app." />
+                <TextBlock x:Name="BackupNote" l:L.Key="settings.data.note" Opacity="0.6" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
+                           Text="" />
 
-                <TextBlock Text="Search &amp; OCR" FontWeight="SemiBold" Opacity="0.8" Margin="0,16,0,4" />
+                <TextBlock l:L.Key="settings.searchocr" Text="Search &amp; OCR" FontWeight="SemiBold" Opacity="0.8" Margin="0,16,0,4" />
                 <TextBlock x:Name="OcrStatusText" Opacity="0.8" TextWrapping="Wrap" />
                 <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
-                    <Button x:Name="RerunOcrButton" Content="Re-run OCR on all images" Click="RerunOcr_Click" />
-                    <Button x:Name="RebuildIndexButton" Content="Rebuild search index" Click="RebuildIndex_Click" />
+                    <Button x:Name="RerunOcrButton" l:L.Key="settings.ocr.rerun" Content="Re-run OCR on all images" Click="RerunOcr_Click" />
+                    <Button x:Name="RebuildIndexButton" l:L.Key="settings.search.rebuild" Content="Rebuild search index" Click="RebuildIndex_Click" />
                 </StackPanel>
                 <ProgressBar x:Name="MaintProgress" Visibility="Collapsed" Margin="0,4,0,0" />
 
-                <TextBlock Text="Behavior" FontWeight="SemiBold" Opacity="0.8" Margin="0,16,0,4" />
-                <ToggleSwitch x:Name="ConfirmDeleteToggle" Header="Confirm before deleting a note"
+                <TextBlock l:L.Key="settings.behavior" Text="Behavior" FontWeight="SemiBold" Opacity="0.8" Margin="0,16,0,4" />
+                <ToggleSwitch x:Name="ConfirmDeleteToggle" l:L.Key="settings.behavior.confirmdelete" Header="Confirm before deleting a note"
                               Toggled="ConfirmDeleteToggle_Toggled" />
-                <ToggleSwitch x:Name="SpellCheckToggle" Header="Spell check in the editor"
+                <ToggleSwitch x:Name="SpellCheckToggle" l:L.Key="settings.behavior.spellcheck" Header="Spell check in the editor"
                               Toggled="SpellCheckToggle_Toggled" />
-                <ToggleSwitch x:Name="CloseToTrayToggle" Header="Close button hides to the system tray"
+                <ToggleSwitch x:Name="CloseToTrayToggle" l:L.Key="settings.behavior.closetray" Header="Close button hides to the system tray"
                               Toggled="CloseToTrayToggle_Toggled" />
-                <ToggleSwitch x:Name="QuickNoteToggle" Header="Quick Note global hotkey (Win+Alt+N)"
+                <ToggleSwitch x:Name="QuickNoteToggle" l:L.Key="settings.behavior.quicknote" Header="Quick Note global hotkey (Win+Alt+N)"
                               Toggled="QuickNoteToggle_Toggled" />
-                <ToggleSwitch x:Name="PasteSourceToggle" Header="Keep source link when pasting from the web"
+                <ToggleSwitch x:Name="PasteSourceToggle" l:L.Key="settings.behavior.pastesource" Header="Keep source link when pasting from the web"
                               Toggled="PasteSourceToggle_Toggled" />
             </StackPanel>
         </ScrollViewer>

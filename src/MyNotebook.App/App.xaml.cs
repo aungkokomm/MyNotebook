@@ -70,7 +70,9 @@ public partial class App : Application
         {
             // Apply the saved accent before the window's controls load (Resources isn't
             // accessible yet in the App constructor — it throws there).
-            ApplyAccent(Services.GetRequiredService<ISettingsService>().Current.AccentColor);
+            var settings = Services.GetRequiredService<ISettingsService>();
+            Loc.Init(settings.Current.Language);          // resolve UI language before any window loads
+            ApplyAccent(settings.Current.AccentColor);
             _window = Services.GetRequiredService<MainWindow>();
             _window.Activate();
             Log("Window activated");

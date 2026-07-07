@@ -100,6 +100,7 @@ public sealed partial class MainWindow : Window
         SetTitleBar(AppTitleBar);
         Title = "My Notebook";
         SetWindowIcon();
+        LocalizeChrome();
         RestoreWindowPlacement();
 
         ThreadCards.ItemsSource = _cards;
@@ -174,24 +175,24 @@ public sealed partial class MainWindow : Window
         SidebarTree.RootNodes.Clear();
         _info.Clear();
 
-        _allNotesNode = MakeNode(new NodeItem { Kind = NodeKind.AllNotes, Title = "All Notes", Glyph = "🗂" });
+        _allNotesNode = MakeNode(new NodeItem { Kind = NodeKind.AllNotes, Title = Loc.T("rail.allnotes"), Glyph = "🗂" });
         SidebarTree.RootNodes.Add(_allNotesNode);
 
         var folders = _notes.ListFolders();
         foreach (var f in folders.Where(f => f.ParentId is null))
             SidebarTree.RootNodes.Add(BuildFolderNode(f, folders));
 
-        _unfiledNode = MakeNode(new NodeItem { Kind = NodeKind.Unfiled, Title = "Unfiled", Glyph = "🗒" });
+        _unfiledNode = MakeNode(new NodeItem { Kind = NodeKind.Unfiled, Title = Loc.T("rail.unfiled"), Glyph = "🗒" });
         SidebarTree.RootNodes.Add(_unfiledNode);
 
-        var group = MakeNode(new NodeItem { Kind = NodeKind.Group, Title = "Smart Folders", Glyph = "🔎" });
+        var group = MakeNode(new NodeItem { Kind = NodeKind.Group, Title = Loc.T("rail.smartfolders"), Glyph = "🔎" });
         group.IsExpanded = true;
         foreach (var s in _notes.ListSavedSearches())
             group.Children.Add(MakeNode(new NodeItem { Kind = NodeKind.SmartFolder, Query = s.Query, Title = s.Name, Glyph = "🔎" }));
         SidebarTree.RootNodes.Add(group);
 
         var trashCount = _notes.GetStats().DeletedNotes;
-        SidebarTree.RootNodes.Add(MakeNode(new NodeItem { Kind = NodeKind.Trash, Title = $"Trash ({trashCount})", Glyph = "🗑" }));
+        SidebarTree.RootNodes.Add(MakeNode(new NodeItem { Kind = NodeKind.Trash, Title = Loc.T("rail.trash", trashCount), Glyph = "🗑" }));
 
         HighlightCurrentFilterNode();   // re-select the node for the active filter
         PopulateNoteList();             // refresh the note list to match
@@ -302,12 +303,37 @@ public sealed partial class MainWindow : Window
         if (args.InvokedItem is not TreeViewNode node || !_info.TryGetValue(node, out var item)) return;
         switch (item.Kind)
         {
-            case NodeKind.AllNotes:    ApplyFilter(ListFilter.AllNotes, 0, "All Notes", ""); break;
+            case NodeKind.AllNotes:    ApplyFilter(ListFilter.AllNotes, 0, Loc.T("rail.allnotes"), ""); break;
             case NodeKind.Folder:      ApplyFilter(ListFilter.Folder, item.Id, item.Title, ""); break;
-            case NodeKind.Unfiled:     ApplyFilter(ListFilter.Unfiled, 0, "Unfiled", ""); break;
+            case NodeKind.Unfiled:     ApplyFilter(ListFilter.Unfiled, 0, Loc.T("rail.unfiled"), ""); break;
             case NodeKind.SmartFolder: ApplyFilter(ListFilter.SmartFolder, 0, item.Title, item.Query); break;
-            case NodeKind.Trash:       ApplyFilter(ListFilter.Trash, 0, "Trash", ""); break;
+            case NodeKind.Trash:       ApplyFilter(ListFilter.Trash, 0, Loc.T("rail.trashshort"), ""); break;
         }
+    }
+
+    /// <summary>Localize the static chrome strings that live in XAML (not rebuilt per note).</summary>
+    private void LocalizeChrome()
+    {
+        SearchBox.PlaceholderText = Loc.T("search.placeholder");
+        EmptyState.Text = Loc.T("content.empty");
+        NoteListEmpty.Text = Loc.T("list.empty");
+    }
+
+    /// <summary>Send the editor its localized strings (placeholder + image toolbar tooltips).</summary>
+    private void PushLocaleToWeb()
+    {
+        if (NoteWeb.CoreWebView2 is null) return;
+        var o = new
+        {
+            placeholder = Loc.T("editor.placeholder"),
+            imgInline = Loc.T("editor.img.inline"),
+            imgWrapLeft = Loc.T("editor.img.wrapleft"),
+            imgWrapRight = Loc.T("editor.img.wrapright"),
+            imgBlock = Loc.T("editor.img.block"),
+            imgFit = Loc.T("editor.img.fit"),
+            imgView = Loc.T("editor.img.view"),
+        };
+        _ = NoteWeb.CoreWebView2.ExecuteScriptAsync($"setLocale({JsonSerializer.Serialize(o)})");
     }
 
     // Folders are realized eagerly and the special nodes are leaves, so there is nothing to lazy-load.
@@ -1225,6 +1251,7 @@ public sealed partial class MainWindow : Window
         {
             case "ready":
                 _webReady = true;
+                PushLocaleToWeb();
                 if (_pendingWebNote is { } pend) { _pendingWebNote = null; LoadNoteIntoWeb(pend); }
                 break;
             case "save":
@@ -2023,6 +2050,14 @@ public sealed partial class MainWindow : Window
  }
  function exec(cmd,val){ed.focus();restore();document.execCommand(cmd,false,val||null);snap();save();}
  function setSpell(on){ed.spellcheck=!!on;}
+ // Localize UI strings that live inside the editor (placeholder + image toolbar tooltips).
+ function setLocale(o){
+   try{
+     if(o.placeholder!=null)ed.setAttribute('data-ph',o.placeholder);
+     var m={wInline:'imgInline',wLeft:'imgWrapLeft',wRight:'imgWrapRight',wBlock:'imgBlock',bFit:'imgFit',bView:'imgView'};
+     for(var id in m){var b=document.getElementById(id);if(b&&o[m[id]]!=null)b.title=o[m[id]];}
+   }catch(_){}
+ }
  function findNext(q){if(!q)return;ed.focus();window.find&&window.find(q,false,false,true,false,true,false);}
  function replaceOne(q,r){var s=getSelection();if(s.rangeCount&&s.toString().toLowerCase()===String(q).toLowerCase()){document.execCommand('insertText',false,r);save();}findNext(q);}
  function replaceAll(q,r){if(!q)return 0;ed.focus();getSelection().collapse(ed,0);var n=0;

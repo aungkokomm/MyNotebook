@@ -28,10 +28,12 @@ public sealed partial class AboutWindow : Window
             try { AppLogo.Source = new BitmapImage(new Uri(icon)); } catch { /* logo is optional */ }
         }
 
-        VersionText.Text = $"Version {GetAppVersion()}";
+        VersionText.Text = Loc.T("about.version", GetAppVersion());
+        UpdatesBar.Title = Loc.T("about.updates.title");
+        UpdatesBar.Message = Loc.T("about.updates.msg");
 
-        // Size the window to exactly fit its content (no clipping, no scrollbar).
-        RootPanel.Loaded += (_, _) => FitToContent();
+        // Translate tagged controls, then size the window to exactly fit its content.
+        RootPanel.Loaded += (_, _) => { L.Apply(RootPanel); FitToContent(); };
         RootPanel.SizeChanged += (_, _) => FitToContent();
     }
 

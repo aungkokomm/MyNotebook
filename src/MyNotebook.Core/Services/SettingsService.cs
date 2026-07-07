@@ -42,6 +42,9 @@ public sealed class AppSettings
 
     /// <summary>When pasting text copied from a web page, append the source URL (OneNote-style).</summary>
     public bool PasteSourceUrl { get; set; } = true;
+
+    /// <summary>UI language code ("en", "pt", …), or "" to follow the Windows display language.</summary>
+    public string Language { get; set; } = "";
 }
 
 public interface ISettingsService

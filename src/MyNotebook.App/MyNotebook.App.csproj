@@ -8,7 +8,7 @@
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>MyNotebook.App</RootNamespace>
-    <Version>1.8.0</Version>
+    <Version>1.8.1</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
     <Platforms>x64</Platforms>
@@ -49,6 +49,13 @@
   <!-- Ship the icon next to the exe so AppWindow.SetIcon can load it at runtime. -->
   <ItemGroup>
     <Content Include="Assets\AppIcon.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <!-- Translator-editable UI strings, shipped next to the exe (Strings\en.json, pt.json, …). -->
+  <ItemGroup>
+    <Content Include="Strings\*.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
