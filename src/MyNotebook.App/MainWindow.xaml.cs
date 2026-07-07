@@ -1636,6 +1636,17 @@ public sealed partial class MainWindow : Window
    padding:5px 9px;border-radius:7px;pointer-events:none;box-shadow:0 3px 12px rgba(0,0,0,.35);white-space:nowrap;}
  #imgMarker{position:fixed;z-index:10002;display:none;width:3px;border-radius:2px;background:#2f6fed;
    pointer-events:none;box-shadow:0 0 0 1px rgba(255,255,255,.65);}
+ #ed table{border-collapse:collapse;margin:12px 0;max-width:100%;}
+ #ed td,#ed th{border:1px solid rgba(128,128,128,.5);padding:6px 10px;min-width:44px;vertical-align:top;}
+ #ed th{background:rgba(128,128,128,.14);font-weight:600;text-align:left;}
+ #ed td.tsel,#ed th.tsel{outline:2px solid #2f6fed;outline-offset:-2px;}
+ #tblBar{position:fixed;z-index:10001;display:none;align-items:center;gap:1px;background:Canvas;color:CanvasText;
+   border:1px solid rgba(128,128,128,.32);border-radius:11px;box-shadow:0 8px 28px rgba(0,0,0,.24);padding:4px;}
+ #tblBar button{border:0;background:transparent;color:inherit;height:30px;min-width:32px;padding:0 7px;cursor:pointer;
+   border-radius:7px;font-size:13px;display:inline-flex;align-items:center;justify-content:center;}
+ #tblBar button:hover{background:rgba(128,128,128,.16);}
+ #tblBar button.danger:hover{background:rgba(209,52,56,.18);color:#d13438;}
+ #tblBar .sep{width:1px;height:20px;background:rgba(128,128,128,.28);margin:0 4px;flex:none;}
  #ed ul,#ed ol{margin:.2em 0 .6em 1.4em;padding-left:1em;}
  #ed li{margin:.15em 0;}
  #ed h1{font-size:1.6em;font-weight:600;line-height:1.25;margin:.6em 0 .3em;}
@@ -1658,8 +1669,13 @@ public sealed partial class MainWindow : Window
  .wlitem{padding:6px 12px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
  .wlitem.sel{background:Highlight;color:HighlightText;}
  ::highlight(jump){background:#ffd54a;color:#1c1c1c;}
+ ::highlight(find){background:#ffe08a;color:#111;}
+ ::highlight(findcur){background:#ff9f43;color:#111;}
+ #wc{position:fixed;right:16px;bottom:9px;z-index:9996;font-size:11px;color:GrayText;pointer-events:none;
+   background:Canvas;padding:2px 9px;border-radius:9px;opacity:.7;}
 </style></head><body>
 <div id="ed" contenteditable="true" data-ph="Start typing… (Ctrl+V to paste a screenshot)"></div>
+<div id="wc"></div>
 <div id="imgBar">
   <button id="wInline" title="Inline with text"><svg viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><rect x="4" y="11" width="8" height="7" rx="1"/><line x1="15" y1="13" x2="20" y2="13"/><line x1="15" y1="17" x2="20" y2="17"/></svg></button>
   <button id="wLeft" title="Wrap text on the right"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="9" height="9" rx="1"/><line x1="16" y1="8" x2="20" y2="8"/><line x1="16" y1="12" x2="20" y2="12"/><line x1="4" y1="19" x2="20" y2="19"/></svg></button>
@@ -1675,6 +1691,16 @@ public sealed partial class MainWindow : Window
 <div class="imghdl" data-c="se"></div>
 <div id="imgBadge"></div>
 <div id="imgMarker"></div>
+<div id="tblBar">
+  <button id="tRowAdd" title="Add row below">+ Row</button>
+  <button id="tRowDel" class="danger" title="Delete row">&#8722; Row</button>
+  <span class="sep"></span>
+  <button id="tColAdd" title="Add column right">+ Col</button>
+  <button id="tColDel" class="danger" title="Delete column">&#8722; Col</button>
+  <span class="sep"></span>
+  <button id="tHead" title="Toggle header row">Header</button>
+  <button id="tDel" class="danger" title="Delete table">&#128465;</button>
+</div>
 <script>
  var ed=document.getElementById('ed');
  var W=window.chrome.webview;
@@ -1992,7 +2018,9 @@ public sealed partial class MainWindow : Window
  function loadNote(html,o){
    clearTimeout(t);curId=o.id||0;clearJump();
    selImg=null;placeImgUi();           // drop image selection from the previous note
+   try{findClose();}catch(e){}         // clear any find highlights from the previous note
    ed.innerHTML=html||'';
+   setTimeout(countWC,0);
    ed.spellcheck=!!o.spell;
    document.documentElement.style.setProperty('--rule',o.rule);
    document.documentElement.style.background=o.bg;document.body.style.background=o.bg;
@@ -2049,6 +2077,85 @@ public sealed partial class MainWindow : Window
    save();
  }
  function exec(cmd,val){ed.focus();restore();document.execCommand(cmd,false,val||null);snap();save();}
+ // ---- Hyperlink -------------------------------------------------------------------
+ function makeLink(url){
+   ed.focus();restore();var s=getSelection();if(!s.rangeCount)return;
+   if(s.isCollapsed){var a=document.createElement('a');a.setAttribute('href',url);a.textContent=url;
+     s.getRangeAt(0).insertNode(a);}
+   else{document.execCommand('createLink',false,url);}
+   snap();save();
+ }
+ // ---- Tables ----------------------------------------------------------------------
+ function insertTable(r,c){
+   ed.focus();restore();
+   var h='<table>';
+   for(var i=0;i<r;i++){h+='<tr>';for(var j=0;j<c;j++){h+=(i===0?'<th>​</th>':'<td>​</td>');}h+='</tr>';}
+   h+='</table><p>​</p>';
+   document.execCommand('insertHTML',false,h);snap();save();
+ }
+ function curCell(){var s=getSelection();if(!s.rangeCount)return null;var n=s.anchorNode;
+   n=n&&n.nodeType===3?n.parentNode:n;return n&&n.closest?n.closest('td,th'):null;}
+ function cellIndex(cell){return Array.prototype.indexOf.call(cell.parentNode.children,cell);}
+ function tblRowAdd(){var c=curCell();if(!c)return;var row=c.parentNode,tb=row.parentNode;
+   var nr=document.createElement('tr');for(var i=0;i<row.children.length;i++){var td=document.createElement('td');td.innerHTML='​';nr.appendChild(td);}
+   tb.insertBefore(nr,row.nextSibling);placeTblUi();save();}
+ function tblRowDel(){var c=curCell();if(!c)return;var row=c.parentNode,tb=row.parentNode;
+   if(tb.querySelectorAll('tr').length<=1)return;row.parentNode.removeChild(row);placeTblUi();save();}
+ function tblColAdd(){var c=curCell();if(!c)return;var idx=cellIndex(c),tbl=c.closest('table');
+   Array.prototype.forEach.call(tbl.rows,function(rw){var isH=rw.children[idx]&&rw.children[idx].tagName==='TH';
+     var cell=document.createElement(isH?'th':'td');cell.innerHTML='​';
+     rw.insertBefore(cell,rw.children[idx+1]||null);});placeTblUi();save();}
+ function tblColDel(){var c=curCell();if(!c)return;var idx=cellIndex(c),tbl=c.closest('table');
+   if(tbl.rows[0].children.length<=1)return;
+   Array.prototype.forEach.call(tbl.rows,function(rw){if(rw.children[idx])rw.removeChild(rw.children[idx]);});placeTblUi();save();}
+ function tblHeader(){var c=curCell();if(!c)return;var tbl=c.closest('table'),first=tbl.rows[0];
+   var toTh=first.children[0]&&first.children[0].tagName!=='TH';
+   Array.prototype.forEach.call(first.children,function(cell){var nc=document.createElement(toTh?'th':'td');
+     nc.innerHTML=cell.innerHTML;cell.parentNode.replaceChild(nc,cell);});placeTblUi();save();}
+ function tblDelete(){var c=curCell();if(!c)return;var tbl=c.closest('table');if(tbl){tbl.parentNode.removeChild(tbl);}
+   tblBar.style.display='none';save();}
+ var tblBar=document.getElementById('tblBar');
+ function placeTblUi(){
+   var c=curCell();
+   if(!c||!ed.contains(c)){tblBar.style.display='none';return;}
+   var tbl=c.closest('table');var r=tbl.getBoundingClientRect();
+   tblBar.style.display='flex';
+   var bw=tblBar.offsetWidth||300,bh=tblBar.offsetHeight||38;
+   tblBar.style.left=Math.min(Math.max(6,r.left),window.innerWidth-bw-6)+'px';
+   var top=r.top-bh-8;if(top<6)top=Math.min(r.bottom+8,window.innerHeight-bh-6);
+   tblBar.style.top=top+'px';
+ }
+ document.getElementById('tRowAdd').onclick=tblRowAdd;
+ document.getElementById('tRowDel').onclick=tblRowDel;
+ document.getElementById('tColAdd').onclick=tblColAdd;
+ document.getElementById('tColDel').onclick=tblColDel;
+ document.getElementById('tHead').onclick=tblHeader;
+ document.getElementById('tDel').onclick=tblDelete;
+ document.addEventListener('selectionchange',function(){if(document.activeElement===ed)placeTblUi();});
+ ed.addEventListener('scroll',placeTblUi,true);window.addEventListener('resize',placeTblUi);
+ // ---- Markdown-style shortcuts (type a marker then space) --------------------------
+ function mdSpace(){
+   var s=getSelection();if(!s.rangeCount||!s.isCollapsed)return false;
+   var r=s.getRangeAt(0),n=r.startContainer;
+   if(n.nodeType!==3)return false;
+   var pre=n.nodeValue.slice(0,r.startOffset);
+   if(!/^(#|##|###|[-*]|1\.|>|```|\[\]|\[ \]|---)$/.test(pre))return false;
+   if(n.previousSibling&&n.previousSibling.nodeName!=='BR')return false;   // must be at line start
+   n.nodeValue=n.nodeValue.slice(r.startOffset);                          // drop the marker
+   var rr=document.createRange();rr.setStart(n,0);rr.collapse(true);s.removeAllRanges();s.addRange(rr);snap();
+   var k=pre;
+   if(k==='-'||k==='*')exec('insertUnorderedList');
+   else if(k==='1.')exec('insertOrderedList');
+   else if(k==='>')exec('formatBlock','BLOCKQUOTE');
+   else if(k==='```')exec('formatBlock','PRE');
+   else if(k==='---')exec('insertHorizontalRule');
+   else if(k==='[]'||k==='[ ]')document.execCommand('insertText',false,'☐ ');
+   else if(k==='#')exec('formatBlock','H1');
+   else if(k==='##')exec('formatBlock','H2');
+   else if(k==='###')exec('formatBlock','H3');
+   save();return true;
+ }
+ ed.addEventListener('keydown',function(e){if(e.key===' '&&mdSpace())e.preventDefault();});
  function setSpell(on){ed.spellcheck=!!on;}
  // Localize UI strings that live inside the editor (placeholder + image toolbar tooltips).
  function setLocale(o){
@@ -2058,10 +2165,48 @@ public sealed partial class MainWindow : Window
      for(var id in m){var b=document.getElementById(id);if(b&&o[m[id]]!=null)b.title=o[m[id]];}
    }catch(_){}
  }
- function findNext(q){if(!q)return;ed.focus();window.find&&window.find(q,false,false,true,false,true,false);}
- function replaceOne(q,r){var s=getSelection();if(s.rangeCount&&s.toString().toLowerCase()===String(q).toLowerCase()){document.execCommand('insertText',false,r);save();}findNext(q);}
- function replaceAll(q,r){if(!q)return 0;ed.focus();getSelection().collapse(ed,0);var n=0;
-   while(window.find(q,false,false,true,false,true,false)){document.execCommand('insertText',false,r);n++;if(n>5000)break;}save();return n;}
+ // Find & replace via the CSS Custom Highlight API: highlights every match, tracks a current
+ // one, and reports {count,index} so the bar can show "3/12". Optional case sensitivity.
+ var _fm=[],_fi=-1,_fq='',_fmc=false;
+ function findClear(){try{if(window.CSS&&CSS.highlights){CSS.highlights.delete('find');CSS.highlights.delete('findcur');}}catch(e){}}
+ function findCollect(q,mc){
+   _fm=[];_fq=q||'';_fmc=!!mc;
+   if(!q||!window.CSS||!CSS.highlights||typeof Highlight==='undefined')return 0;
+   var needle=mc?q:q.toLowerCase();
+   var w=document.createTreeWalker(ed,NodeFilter.SHOW_TEXT,null),node;
+   while(node=w.nextNode()){
+     var v=node.nodeValue,hay=mc?v:v.toLowerCase(),i=hay.indexOf(needle);
+     while(i>=0){var r=document.createRange();r.setStart(node,i);r.setEnd(node,i+q.length);_fm.push(r);i=hay.indexOf(needle,i+q.length);}
+   }
+   return _fm.length;
+ }
+ function findPaint(){
+   findClear();if(!_fm.length)return;
+   CSS.highlights.set('find',new Highlight(..._fm));
+   if(_fi>=0&&_fi<_fm.length){CSS.highlights.set('findcur',new Highlight(_fm[_fi]));
+     var el=_fm[_fi].startContainer.parentElement;if(el&&el.scrollIntoView)el.scrollIntoView({block:'center'});}
+ }
+ function findRun(q,mc){findCollect(q,mc);_fi=_fm.length?0:-1;findPaint();return{count:_fm.length,index:_fm.length?1:0};}
+ function findStep(dir){if(!_fm.length)return{count:0,index:0};_fi=(_fi+(dir<0?-1:1)+_fm.length)%_fm.length;findPaint();return{count:_fm.length,index:_fi+1};}
+ function findClose(){findClear();_fm=[];_fi=-1;}
+ function replaceCur(r){
+   if(_fi<0||_fi>=_fm.length)return findRun(_fq,_fmc);
+   var s=getSelection();s.removeAllRanges();s.addRange(_fm[_fi]);document.execCommand('insertText',false,r);save();
+   var keep=_fi;findCollect(_fq,_fmc);_fi=_fm.length?Math.min(keep,_fm.length-1):-1;findPaint();
+   return{count:_fm.length,index:_fm.length?_fi+1:0};
+ }
+ function replaceAllQ(q,r,mc){
+   findCollect(q,mc);if(!_fm.length)return 0;
+   for(var i=_fm.length-1;i>=0;i--){var s=getSelection();s.removeAllRanges();s.addRange(_fm[i]);document.execCommand('insertText',false,r);}
+   var n=_fm.length;findClose();save();return n;
+ }
+ // Live word / character count.
+ function countWC(){
+   var t=ed.innerText||'';var wc=document.getElementById('wc');if(!wc)return;
+   var words=(t.match(/\S+/g)||[]).length,chars=t.replace(/\s/g,'').length;
+   wc.textContent=words+' words · '+chars+' chars';
+ }
+ ed.addEventListener('input',countWC);
  post({type:'ready'});
 </script></body></html>
 """;
@@ -2420,6 +2565,42 @@ public sealed partial class MainWindow : Window
     private void ColorGreen_Click(object s, RoutedEventArgs e)   => EditorExec("foreColor", "#107c10");
     private void ColorBlue_Click(object s, RoutedEventArgs e)    => EditorExec("foreColor", "#0078d4");
     private void ColorOrange_Click(object s, RoutedEventArgs e)  => EditorExec("foreColor", "#ca5010");
+
+    private void Quote_Click(object s, RoutedEventArgs e)   => EditorExec("formatBlock", "BLOCKQUOTE");
+    private void Code_Click(object s, RoutedEventArgs e)    => EditorExec("formatBlock", "PRE");
+    private void Divider_Click(object s, RoutedEventArgs e) => EditorExec("insertHorizontalRule");
+
+    private void LinkApply_Click(object s, RoutedEventArgs e)
+    {
+        var url = (LinkUrlBox.Text ?? "").Trim();
+        LinkFlyout.Hide();
+        if (url.Length == 0) return;
+        if (!url.Contains("://") && !url.StartsWith("mailto:")) url = "https://" + url;   // forgive bare domains
+        if (NoteWeb.CoreWebView2 is not null)
+            _ = NoteWeb.CoreWebView2.ExecuteScriptAsync($"makeLink({JsonSerializer.Serialize(url)})");
+        LinkUrlBox.Text = "";
+    }
+
+    private void LinkRemove_Click(object s, RoutedEventArgs e) { LinkFlyout.Hide(); EditorExec("unlink"); }
+
+    private void Table_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement fe || fe.Tag is not string tag) return;
+        var parts = tag.Split('x');
+        if (parts.Length != 2 || !int.TryParse(parts[0], out var rows) || !int.TryParse(parts[1], out var cols)) return;
+        if (NoteWeb.CoreWebView2 is not null)
+            _ = NoteWeb.CoreWebView2.ExecuteScriptAsync($"insertTable({rows},{cols})");
+    }
+
+    private void AlignLeft_Click(object s, RoutedEventArgs e)    => EditorExec("justifyLeft");
+    private void AlignCenter_Click(object s, RoutedEventArgs e)  => EditorExec("justifyCenter");
+    private void AlignRight_Click(object s, RoutedEventArgs e)   => EditorExec("justifyRight");
+    private void AlignJustify_Click(object s, RoutedEventArgs e) => EditorExec("justifyFull");
+    private void Indent_Click(object s, RoutedEventArgs e)       => EditorExec("indent");
+    private void Outdent_Click(object s, RoutedEventArgs e)      => EditorExec("outdent");
+    private void Super_Click(object s, RoutedEventArgs e)        => EditorExec("superscript");
+    private void Sub_Click(object s, RoutedEventArgs e)          => EditorExec("subscript");
+    private void ClearFormat_Click(object s, RoutedEventArgs e)  => EditorExec("removeFormat");
 
     private void Font_Click(object sender, RoutedEventArgs e)
     {
@@ -3001,7 +3182,8 @@ public sealed partial class MainWindow : Window
     }
 
     // ---------------------------------------------------------- Find & replace
-    // Find & replace runs inside the WebView2 document (window.find + execCommand).
+    // Runs inside the WebView2 document: highlights every match (CSS Custom Highlight API),
+    // tracks a current match, and reports {count,index} so the bar shows "3/12".
     private void ToggleFindBar()
     {
         if (EditorPane.Visibility != Visibility.Visible) return;
@@ -3011,47 +3193,89 @@ public sealed partial class MainWindow : Window
         {
             FindBox.Focus(FocusState.Programmatic);
             FindBox.SelectAll();
+            if ((FindBox.Text ?? "").Length > 0) RunFind();   // re-highlight if a term is already there
         }
+        else CloseFindHighlights();
     }
 
     private void CloseFind_Click(object sender, RoutedEventArgs e)
     {
         FindBar.Visibility = Visibility.Collapsed;
+        CloseFindHighlights();
         NoteWeb.Focus(FocusState.Programmatic);
+    }
+
+    private void CloseFindHighlights()
+    {
+        FindCount.Text = "";
+        _ = NoteWeb.CoreWebView2?.ExecuteScriptAsync("findClose()");
     }
 
     private void FindBox_KeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key == VirtualKey.Enter) { FindNext(); e.Handled = true; }
+        if (e.Key == VirtualKey.Enter)
+        {
+            bool back = (Microsoft.UI.Input.InputKeyboardSource
+                .GetKeyStateForCurrentThread(VirtualKey.Shift) & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
+            _ = FindStep(back ? -1 : 1); e.Handled = true;
+        }
         else if (e.Key == VirtualKey.Escape) { CloseFind_Click(sender, e); e.Handled = true; }
     }
 
-    private void FindNext_Click(object sender, RoutedEventArgs e) => FindNext();
+    private void FindBox_TextChanged(object sender, TextChangedEventArgs e) => RunFind();
+    private void FindCase_Click(object sender, RoutedEventArgs e) => RunFind();
+    private void FindNext_Click(object sender, RoutedEventArgs e) => _ = FindStep(1);
+    private void FindPrev_Click(object sender, RoutedEventArgs e) => _ = FindStep(-1);
 
-    private bool FindNext()
+    /// <summary>Search for the current term and highlight all matches; updates the counter.</summary>
+    private async void RunFind()
     {
         var q = FindBox.Text ?? "";
-        if (q.Length == 0 || NoteWeb.CoreWebView2 is null) return false;
-        _ = NoteWeb.CoreWebView2.ExecuteScriptAsync($"findNext({JsonSerializer.Serialize(q)})");
-        return true;
+        if (NoteWeb.CoreWebView2 is null) return;
+        if (q.Length == 0) { FindCount.Text = ""; _ = NoteWeb.CoreWebView2.ExecuteScriptAsync("findClose()"); return; }
+        bool mc = FindCase.IsChecked == true;
+        var raw = await NoteWeb.CoreWebView2.ExecuteScriptAsync(
+            $"findRun({JsonSerializer.Serialize(q)},{(mc ? "true" : "false")})");
+        UpdateFindCount(raw);
     }
 
-    private void Replace_Click(object sender, RoutedEventArgs e)
+    private async Task FindStep(int dir)
     {
-        var q = FindBox.Text ?? "";
-        if (q.Length == 0 || NoteWeb.CoreWebView2 is null) return;
-        _ = NoteWeb.CoreWebView2.ExecuteScriptAsync(
-            $"replaceOne({JsonSerializer.Serialize(q)},{JsonSerializer.Serialize(ReplaceBox.Text ?? "")})");
+        if (NoteWeb.CoreWebView2 is null) return;
+        if ((FindBox.Text ?? "").Length == 0) { FindCount.Text = ""; return; }
+        var raw = await NoteWeb.CoreWebView2.ExecuteScriptAsync($"findStep({dir})");
+        UpdateFindCount(raw);
+    }
+
+    private void UpdateFindCount(string raw)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(raw);
+            int count = doc.RootElement.GetProperty("count").GetInt32();
+            int index = doc.RootElement.GetProperty("index").GetInt32();
+            FindCount.Text = count == 0 ? "No results" : $"{index}/{count}";
+        }
+        catch { FindCount.Text = ""; }
+    }
+
+    private async void Replace_Click(object sender, RoutedEventArgs e)
+    {
+        if ((FindBox.Text ?? "").Length == 0 || NoteWeb.CoreWebView2 is null) return;
+        var raw = await NoteWeb.CoreWebView2.ExecuteScriptAsync(
+            $"replaceCur({JsonSerializer.Serialize(ReplaceBox.Text ?? "")})");
+        UpdateFindCount(raw);
     }
 
     private async void ReplaceAll_Click(object sender, RoutedEventArgs e)
     {
         var q = FindBox.Text ?? "";
         if (q.Length == 0 || NoteWeb.CoreWebView2 is null) return;
+        bool mc = FindCase.IsChecked == true;
         var raw = await NoteWeb.CoreWebView2.ExecuteScriptAsync(
-            $"replaceAll({JsonSerializer.Serialize(q)},{JsonSerializer.Serialize(ReplaceBox.Text ?? "")})");
+            $"replaceAllQ({JsonSerializer.Serialize(q)},{JsonSerializer.Serialize(ReplaceBox.Text ?? "")},{(mc ? "true" : "false")})");
         int count = int.TryParse(raw, out var n) ? n : 0;
-        FindBar.Visibility = Visibility.Collapsed;
+        FindCount.Text = "";
         await ShowInfoAsync("Replace all", $"Replaced {count} occurrence(s).");
     }
 

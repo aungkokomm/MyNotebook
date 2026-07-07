@@ -368,13 +368,20 @@
                             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBox x:Name="FindBox" Width="170" PlaceholderText="Find"
-                                     KeyDown="FindBox_KeyDown" />
-                            <Button Content="Find next" Click="FindNext_Click" />
-                            <TextBox x:Name="ReplaceBox" Width="170" PlaceholderText="Replace with" />
+                            <TextBox x:Name="FindBox" Width="150" PlaceholderText="Find"
+                                     KeyDown="FindBox_KeyDown" TextChanged="FindBox_TextChanged" />
+                            <TextBlock x:Name="FindCount" VerticalAlignment="Center" MinWidth="52"
+                                       FontSize="12" Opacity="0.7" Text="" />
+                            <Button Content="&#x2039;" Click="FindPrev_Click" ToolTipService.ToolTip="Previous (Shift+Enter)" />
+                            <Button Content="&#x203A;" Click="FindNext_Click" ToolTipService.ToolTip="Next (Enter)" />
+                            <ToggleButton x:Name="FindCase" Click="FindCase_Click" ToolTipService.ToolTip="Match case">
+                                <TextBlock Text="Aa" FontSize="13" />
+                            </ToggleButton>
+                            <Rectangle Width="1" Margin="2,3" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                            <TextBox x:Name="ReplaceBox" Width="150" PlaceholderText="Replace with" />
                             <Button Content="Replace" Click="Replace_Click" />
                             <Button Content="All" Click="ReplaceAll_Click" ToolTipService.ToolTip="Replace all" />
-                            <Button Content="✕" Click="CloseFind_Click" ToolTipService.ToolTip="Close (Esc)" />
+                            <Button Content="&#x2715;" Click="CloseFind_Click" ToolTipService.ToolTip="Close (Esc)" />
                         </StackPanel>
                     </Border>
 
@@ -385,12 +392,7 @@
                             Background="{ThemeResource LayerFillColorDefaultBrush}"
                             BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
                         <StackPanel Orientation="Horizontal" Spacing="1" VerticalAlignment="Center">
-                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Smaller text" Click="FontSmaller_Click">
-                                <TextBlock Text="A−" FontSize="13" VerticalAlignment="Center" HorizontalAlignment="Center" />
-                            </Button>
-                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Bigger text" Click="FontBigger_Click">
-                                <TextBlock Text="A+" FontSize="15" VerticalAlignment="Center" HorizontalAlignment="Center" />
-                            </Button>
+                            <!-- Paragraph -->
                             <Button Width="Auto" Height="32" Padding="8,0" CornerRadius="6"
                                     Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Paragraph styles">
                                 <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
@@ -404,6 +406,12 @@
                                         <MenuFlyoutItem Text="Body" Click="StyleBody_Click" />
                                     </MenuFlyout>
                                 </Button.Flyout>
+                            </Button>
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Smaller text" Click="FontSmaller_Click">
+                                <TextBlock Text="A&#x2212;" FontSize="13" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                            </Button>
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Bigger text" Click="FontBigger_Click">
+                                <TextBlock Text="A+" FontSize="15" VerticalAlignment="Center" HorizontalAlignment="Center" />
                             </Button>
                             <Button Style="{StaticResource FmtButton}" Width="44" ToolTipService.ToolTip="Font">
                                 <TextBlock Text="Aa" FontSize="14" VerticalAlignment="Center" HorizontalAlignment="Center" />
@@ -422,6 +430,7 @@
                                 </Button.Flyout>
                             </Button>
                             <Rectangle Style="{StaticResource FmtSeparator}" />
+                            <!-- Character emphasis + color -->
                             <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Bold (Ctrl+B)" Click="Bold_Click">
                                 <FontIcon Glyph="&#xE8DD;" FontSize="15" />
                             </Button>
@@ -433,21 +442,6 @@
                             </Button>
                             <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Strikethrough" Click="Strike_Click">
                                 <FontIcon Glyph="&#xEDE0;" FontSize="15" />
-                            </Button>
-                            <Rectangle Style="{StaticResource FmtSeparator}" />
-                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Bullet list" Click="Bullets_Click">
-                                <FontIcon Glyph="&#xE8FD;" FontSize="15" />
-                            </Button>
-                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Numbered list" Click="Numbered_Click">
-                                <TextBlock Text="1." FontSize="13" FontWeight="SemiBold"
-                                           VerticalAlignment="Center" HorizontalAlignment="Center" />
-                            </Button>
-                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Checklist" Click="Checklist_Click">
-                                <FontIcon Glyph="&#xE73A;" FontSize="15" />
-                            </Button>
-                            <Rectangle Style="{StaticResource FmtSeparator}" />
-                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Highlight" Click="Highlight_Click">
-                                <FontIcon Glyph="&#xE891;" FontSize="15" />
                             </Button>
                             <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Text color">
                                 <FontIcon Glyph="&#xE8D3;" FontSize="15" />
@@ -461,19 +455,95 @@
                                     </MenuFlyout>
                                 </Button.Flyout>
                             </Button>
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Highlight" Click="Highlight_Click">
+                                <FontIcon Glyph="&#xE891;" FontSize="15" />
+                            </Button>
                             <Rectangle Style="{StaticResource FmtSeparator}" />
+                            <!-- Lists -->
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Bullet list" Click="Bullets_Click">
+                                <FontIcon Glyph="&#xE8FD;" FontSize="15" />
+                            </Button>
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Numbered list" Click="Numbered_Click">
+                                <TextBlock Text="1." FontSize="13" FontWeight="SemiBold"
+                                           VerticalAlignment="Center" HorizontalAlignment="Center" />
+                            </Button>
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Checklist" Click="Checklist_Click">
+                                <FontIcon Glyph="&#xE73A;" FontSize="15" />
+                            </Button>
+                            <Rectangle Style="{StaticResource FmtSeparator}" />
+                            <!-- Blocks: quote, code, divider -->
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Quote" Click="Quote_Click">
+                                <TextBlock Text="&#x275D;" FontSize="17" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                            </Button>
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Code block" Click="Code_Click">
+                                <TextBlock Text="&lt;/&gt;" FontFamily="Consolas" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                            </Button>
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Divider" Click="Divider_Click">
+                                <TextBlock Text="&#x2015;" FontSize="15" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                            </Button>
+                            <Rectangle Style="{StaticResource FmtSeparator}" />
+                            <!-- Insert: link, table -->
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Insert or edit link">
+                                <FontIcon Glyph="&#xE71B;" FontSize="15" />
+                                <Button.Flyout>
+                                    <Flyout x:Name="LinkFlyout">
+                                        <StackPanel Spacing="8" Width="264">
+                                            <TextBlock Text="Link address" FontSize="12" Opacity="0.7" />
+                                            <TextBox x:Name="LinkUrlBox" PlaceholderText="https://…" />
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <Button Content="Apply" Style="{StaticResource AccentButtonStyle}" Click="LinkApply_Click" />
+                                                <Button Content="Remove link" Click="LinkRemove_Click" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Flyout>
+                                </Button.Flyout>
+                            </Button>
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Insert table">
+                                <TextBlock Text="&#x25A6;" FontSize="16" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                                <Button.Flyout>
+                                    <MenuFlyout>
+                                        <MenuFlyoutItem Text="Table 2 &#xD7; 2" Tag="2x2" Click="Table_Click" />
+                                        <MenuFlyoutItem Text="Table 3 &#xD7; 3" Tag="3x3" Click="Table_Click" />
+                                        <MenuFlyoutItem Text="Table 4 &#xD7; 3" Tag="3x4" Click="Table_Click" />
+                                        <MenuFlyoutItem Text="Table 2 rows &#xD7; 4 cols" Tag="2x4" Click="Table_Click" />
+                                        <MenuFlyoutItem Text="Table 5 rows &#xD7; 2 cols" Tag="5x2" Click="Table_Click" />
+                                    </MenuFlyout>
+                                </Button.Flyout>
+                            </Button>
+                            <Rectangle Style="{StaticResource FmtSeparator}" />
+                            <!-- More formatting: alignment, indent, super/subscript, clear -->
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="More formatting">
+                                <FontIcon Glyph="&#xE712;" FontSize="15" />
+                                <Button.Flyout>
+                                    <MenuFlyout>
+                                        <MenuFlyoutItem Text="Align left" Click="AlignLeft_Click" />
+                                        <MenuFlyoutItem Text="Align center" Click="AlignCenter_Click" />
+                                        <MenuFlyoutItem Text="Align right" Click="AlignRight_Click" />
+                                        <MenuFlyoutItem Text="Justify" Click="AlignJustify_Click" />
+                                        <MenuFlyoutSeparator />
+                                        <MenuFlyoutItem Text="Increase indent" Click="Indent_Click" />
+                                        <MenuFlyoutItem Text="Decrease indent" Click="Outdent_Click" />
+                                        <MenuFlyoutSeparator />
+                                        <MenuFlyoutItem Text="Superscript" Click="Super_Click" />
+                                        <MenuFlyoutItem Text="Subscript" Click="Sub_Click" />
+                                        <MenuFlyoutSeparator />
+                                        <MenuFlyoutItem Text="Clear formatting" Click="ClearFormat_Click" />
+                                    </MenuFlyout>
+                                </Button.Flyout>
+                            </Button>
+                            <Rectangle Style="{StaticResource FmtSeparator}" />
+                            <!-- Tools -->
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Linked references (backlinks)" Click="LinksButton_Click">
+                                <FontIcon Glyph="&#xE8A5;" FontSize="15" />
+                            </Button>
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Focus mode (F11)" Click="FocusMode_Click">
+                                <FontIcon Glyph="&#xE740;" FontSize="15" />
+                            </Button>
                             <Button x:Name="ReadAloudButton" Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Read aloud" Click="ReadAloud_Click">
                                 <FontIcon x:Name="ReadAloudIcon" Glyph="&#xE767;" FontSize="15" />
                             </Button>
                             <Button x:Name="RecordButton" Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Record audio" Click="RecordAudio_Click">
                                 <FontIcon x:Name="RecordIcon" Glyph="&#xE720;" FontSize="15" />
-                            </Button>
-                            <Rectangle Style="{StaticResource FmtSeparator}" />
-                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Linked references (backlinks)" Click="LinksButton_Click">
-                                <FontIcon Glyph="&#xE71B;" FontSize="15" />
-                            </Button>
-                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Focus mode (F11)" Click="FocusMode_Click">
-                                <FontIcon Glyph="&#xE740;" FontSize="15" />
                             </Button>
                         </StackPanel>
                     </Border>
