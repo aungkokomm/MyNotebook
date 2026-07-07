@@ -387,10 +387,12 @@
 
                     <!-- Formatting toolbar — docked flush to the page, aligned with the
                          sidebar action header. Drives the WebView2 editor via execCommand. -->
-                    <Border x:Name="ToolbarBar" Grid.Row="1" Height="48" Padding="10,0"
+                    <Border x:Name="ToolbarBar" Grid.Row="1" Padding="10,6"
                             Margin="2,8,8,0" CornerRadius="8,8,0,0" BorderThickness="0,0,0,1"
                             Background="{ThemeResource LayerFillColorDefaultBrush}"
                             BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+                      <StackPanel Orientation="Vertical" Spacing="4">
+                        <!-- Row 1: text formatting -->
                         <StackPanel Orientation="Horizontal" Spacing="1" VerticalAlignment="Center">
                             <!-- Paragraph -->
                             <Button Width="Auto" Height="32" Padding="8,0" CornerRadius="6"
@@ -459,6 +461,29 @@
                                 <FontIcon Glyph="&#xE891;" FontSize="15" />
                             </Button>
                             <Rectangle Style="{StaticResource FmtSeparator}" />
+                            <!-- More formatting: alignment, indent, super/subscript, clear -->
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="More formatting">
+                                <FontIcon Glyph="&#xE712;" FontSize="15" />
+                                <Button.Flyout>
+                                    <MenuFlyout>
+                                        <MenuFlyoutItem Text="Align left" Click="AlignLeft_Click" />
+                                        <MenuFlyoutItem Text="Align center" Click="AlignCenter_Click" />
+                                        <MenuFlyoutItem Text="Align right" Click="AlignRight_Click" />
+                                        <MenuFlyoutItem Text="Justify" Click="AlignJustify_Click" />
+                                        <MenuFlyoutSeparator />
+                                        <MenuFlyoutItem Text="Increase indent" Click="Indent_Click" />
+                                        <MenuFlyoutItem Text="Decrease indent" Click="Outdent_Click" />
+                                        <MenuFlyoutSeparator />
+                                        <MenuFlyoutItem Text="Superscript" Click="Super_Click" />
+                                        <MenuFlyoutItem Text="Subscript" Click="Sub_Click" />
+                                        <MenuFlyoutSeparator />
+                                        <MenuFlyoutItem Text="Clear formatting" Click="ClearFormat_Click" />
+                                    </MenuFlyout>
+                                </Button.Flyout>
+                            </Button>
+                        </StackPanel>
+                        <!-- Row 2: structure & insert -->
+                        <StackPanel Orientation="Horizontal" Spacing="1" VerticalAlignment="Center">
                             <!-- Lists -->
                             <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Bullet list" Click="Bullets_Click">
                                 <FontIcon Glyph="&#xE8FD;" FontSize="15" />
@@ -511,27 +536,6 @@
                                 </Button.Flyout>
                             </Button>
                             <Rectangle Style="{StaticResource FmtSeparator}" />
-                            <!-- More formatting: alignment, indent, super/subscript, clear -->
-                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="More formatting">
-                                <FontIcon Glyph="&#xE712;" FontSize="15" />
-                                <Button.Flyout>
-                                    <MenuFlyout>
-                                        <MenuFlyoutItem Text="Align left" Click="AlignLeft_Click" />
-                                        <MenuFlyoutItem Text="Align center" Click="AlignCenter_Click" />
-                                        <MenuFlyoutItem Text="Align right" Click="AlignRight_Click" />
-                                        <MenuFlyoutItem Text="Justify" Click="AlignJustify_Click" />
-                                        <MenuFlyoutSeparator />
-                                        <MenuFlyoutItem Text="Increase indent" Click="Indent_Click" />
-                                        <MenuFlyoutItem Text="Decrease indent" Click="Outdent_Click" />
-                                        <MenuFlyoutSeparator />
-                                        <MenuFlyoutItem Text="Superscript" Click="Super_Click" />
-                                        <MenuFlyoutItem Text="Subscript" Click="Sub_Click" />
-                                        <MenuFlyoutSeparator />
-                                        <MenuFlyoutItem Text="Clear formatting" Click="ClearFormat_Click" />
-                                    </MenuFlyout>
-                                </Button.Flyout>
-                            </Button>
-                            <Rectangle Style="{StaticResource FmtSeparator}" />
                             <!-- Tools -->
                             <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Linked references (backlinks)" Click="LinksButton_Click">
                                 <FontIcon Glyph="&#xE8A5;" FontSize="15" />
@@ -546,6 +550,7 @@
                                 <FontIcon x:Name="RecordIcon" Glyph="&#xE720;" FontSize="15" />
                             </Button>
                         </StackPanel>
+                      </StackPanel>
                     </Border>
 
                     <!-- The page: the rounded-bottom body of the editor card, flush under the toolbar. -->
