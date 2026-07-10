@@ -8,7 +8,7 @@
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>MyNotebook.App</RootNamespace>
-    <Version>1.9.0</Version>
+    <Version>2.0.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
     <Platforms>x64</Platforms>
@@ -56,6 +56,13 @@
   <!-- Translator-editable UI strings, shipped next to the exe (Strings\en.json, pt.json, …). -->
   <ItemGroup>
     <Content Include="Strings\*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <!-- KaTeX math renderer (offline): css/js + woff2 fonts, served to the editor WebView. -->
+  <ItemGroup>
+    <Content Include="Assets\katex\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

@@ -559,6 +559,10 @@
                                     </MenuFlyout>
                                 </Button.Flyout>
                             </Button>
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Insert equation (math)" Click="InsertEquation_Click">
+                                <TextBlock Text="fx" FontFamily="Georgia" FontStyle="Italic" FontSize="15"
+                                           VerticalAlignment="Center" HorizontalAlignment="Center" />
+                            </Button>
                         </StackPanel>
                       </StackPanel>
                     </Border>

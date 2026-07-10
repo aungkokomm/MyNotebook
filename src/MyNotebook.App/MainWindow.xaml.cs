@@ -840,7 +840,11 @@ public sealed partial class MainWindow : Window
         if (file is null) return;
         try
         {
-            await WordExporter.ExportAsync(NoteContentHtml(note), file.Path);
+            // KaTeX HTML doesn't survive the HTML->OOXML conversion; show each equation as its LaTeX source.
+            var html = ReplaceMathNodes(NoteContentHtml(note), (tex, disp) =>
+                disp ? $"<p style=\"text-align:center;font-family:Consolas\">{WebUtility.HtmlEncode(tex)}</p>"
+                     : $"<code>{WebUtility.HtmlEncode(tex)}</code>");
+            await WordExporter.ExportAsync(html, file.Path);
             await ShowInfoAsync("Exported Word document", file.Path);
         }
         catch (Exception ex) { await ShowInfoAsync("Export failed", ex.Message); }
@@ -958,7 +962,62 @@ public sealed partial class MainWindow : Window
         "body{font-family:Calibri,'Segoe UI','Myanmar Text',sans-serif;font-size:16px;line-height:1.7;" +
         "color:#1c1c1c;max-width:760px;margin:32px auto;padding:0 24px;}" +
         "h1{font-size:1.7em;font-weight:600;margin:0 0 4px;}img{max-width:100%;height:auto;border-radius:4px;}" +
-        "</style></head><body>" + NoteContentHtml(note) + "</body></html>";
+        ".mathnode[data-display=\"1\"]{display:block;text-align:center;margin:12px 0;}" +
+        "</style><style>" + KatexCss() + "</style></head><body>" + NoteContentHtml(note) + "</body></html>";
+
+    // KaTeX stylesheet with the fonts embedded as base64 (self-contained), read once and cached.
+    private static string? _katexCss;
+    private static string KatexCss()
+    {
+        if (_katexCss is not null) return _katexCss;
+        try
+        {
+            var p = Path.Combine(AppContext.BaseDirectory, "Assets", "katex", "katex-embed.css");
+            _katexCss = File.Exists(p) ? File.ReadAllText(p) : "";
+        }
+        catch { _katexCss = ""; }
+        return _katexCss;
+    }
+
+    // Replace each rendered <span class="mathnode" data-latex="…">…</span> (spans can nest) with the
+    // result of <paramref name="repl"/>(latexSource, isDisplay). Used to turn math into plain LaTeX for
+    // Word/PDF, where KaTeX HTML would otherwise be garbled.
+    private static string ReplaceMathNodes(string html, Func<string, bool, string> repl)
+    {
+        const string marker = "<span class=\"mathnode\"";
+        var sb = new StringBuilder();
+        int i = 0;
+        while (i < html.Length)
+        {
+            int m = html.IndexOf(marker, i, StringComparison.Ordinal);
+            if (m < 0) { sb.Append(html, i, html.Length - i); break; }
+            sb.Append(html, i, m - i);
+            int gt = html.IndexOf('>', m);
+            if (gt < 0) { sb.Append(html, m, html.Length - m); break; }
+            var open = html.Substring(m, gt - m + 1);
+            var latex = WebUtility.HtmlDecode(AttrValue(open, "data-latex"));
+            bool disp = AttrValue(open, "data-display") == "1";
+            // Find the matching </span>, accounting for nested <span>.
+            int depth = 1, j = gt + 1;
+            while (j < html.Length && depth > 0)
+            {
+                int ns = html.IndexOf("<span", j, StringComparison.Ordinal);
+                int cs = html.IndexOf("</span>", j, StringComparison.Ordinal);
+                if (cs < 0) { j = html.Length; break; }
+                if (ns >= 0 && ns < cs) { depth++; j = ns + 5; }
+                else { depth--; j = cs + 7; }
+            }
+            sb.Append(repl(latex, disp));
+            i = j;
+        }
+        return sb.ToString();
+    }
+
+    private static string AttrValue(string tag, string name)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(tag, name + "=\"([^\"]*)\"");
+        return m.Success ? m.Groups[1].Value : "";
+    }
 
     private string EmbedImages(string html) =>
         System.Text.RegularExpressions.Regex.Replace(html, "https://notes\\.local/([^\"'\\s>]+)", m =>
@@ -1225,6 +1284,9 @@ public sealed partial class MainWindow : Window
             var core = NoteWeb.CoreWebView2;
             // Serve attachment files: https://notes.local/<relpath> -> DataRoot\<relpath>.
             core.SetVirtualHostNameToFolderMapping("notes.local", _paths.DataRoot,
+                CoreWebView2HostResourceAccessKind.Allow);
+            // Serve bundled app assets (KaTeX css/js/fonts): https://app.local/Assets/...
+            core.SetVirtualHostNameToFolderMapping("app.local", AppContext.BaseDirectory,
                 CoreWebView2HostResourceAccessKind.Allow);
             core.Settings.AreDevToolsEnabled = false;
             core.Settings.IsZoomControlEnabled = false;
@@ -1599,6 +1661,9 @@ public sealed partial class MainWindow : Window
     // The editor document. Self-contained (HTML+CSS+JS) so there is no asset file to ship.
     private const string EditorHtml = """
 <!DOCTYPE html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://app.local/Assets/katex/katex.min.css">
+<script src="https://app.local/Assets/katex/katex.min.js"></script>
+<script src="https://app.local/Assets/katex/auto-render.min.js"></script>
 <style>
  html,body{margin:0;padding:0;height:100%;background:transparent;}
  #ed{outline:none;min-height:100%;box-sizing:border-box;max-width:760px;margin:0 auto;
@@ -1673,8 +1738,40 @@ public sealed partial class MainWindow : Window
  ::highlight(findcur){background:#ff9f43;color:#111;}
  #wc{position:fixed;right:16px;bottom:9px;z-index:9996;font-size:11px;color:GrayText;pointer-events:none;
    background:Canvas;padding:2px 9px;border-radius:9px;opacity:.7;}
+ /* Math: rendered equations pasted from AI chats or inserted via the fx button. */
+ #ed .mathnode{cursor:pointer;border-radius:3px;}
+ #ed .mathnode[data-display="0"]{display:inline-block;padding:0 1px;vertical-align:middle;}
+ #ed .mathnode[data-display="1"]{display:block;text-align:center;margin:12px 0;}
+ #ed .mathnode:hover{background:rgba(47,111,237,.12);}
+ #ed .mathnode.sel{outline:2px solid #2f6fed;outline-offset:2px;}
+ .katex{font-size:1.05em;}
+ #mathEdit{position:fixed;z-index:10005;display:none;left:50%;top:22%;transform:translateX(-50%);width:min(520px,92vw);
+   background:Canvas;color:CanvasText;border:1px solid rgba(128,128,128,.35);border-radius:12px;
+   box-shadow:0 18px 50px rgba(0,0,0,.4);padding:14px;}
+ #mathEdit textarea{width:100%;box-sizing:border-box;min-height:64px;font-family:Consolas,monospace;font-size:14px;
+   border:1px solid rgba(128,128,128,.4);border-radius:7px;padding:8px;background:transparent;color:inherit;resize:vertical;}
+ #mathEdit .mprev{min-height:44px;margin:10px 0;padding:8px;border-radius:7px;background:rgba(128,128,128,.08);
+   overflow-x:auto;text-align:center;}
+ #mathEdit .mrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+ #mathEdit button{border:1px solid rgba(128,128,128,.4);background:transparent;color:inherit;border-radius:7px;
+   padding:6px 12px;cursor:pointer;font:inherit;}
+ #mathEdit button.pri{background:#2f6fed;color:#fff;border-color:#2f6fed;}
+ #mathEdit button.danger{color:#d13438;}
+ #mathEdit .mhint{font-size:12px;opacity:.65;}
 </style></head><body>
 <div id="ed" contenteditable="true" data-ph="Start typing… (Ctrl+V to paste a screenshot)"></div>
+<div id="mathEdit">
+  <div class="mhint">LaTeX equation (for example  \frac{a}{b}  or  x^2 + y^2 )</div>
+  <textarea id="mathIn" spellcheck="false"></textarea>
+  <div class="mprev" id="mathPrev"></div>
+  <div class="mrow">
+    <label class="mhint"><input type="checkbox" id="mathDisp"> Display (own line)</label>
+    <span style="flex:1"></span>
+    <button id="mathDel" class="danger" style="display:none">Delete</button>
+    <button id="mathCancel">Cancel</button>
+    <button id="mathOk" class="pri">Insert</button>
+  </div>
+</div>
 <div id="wc"></div>
 <div id="imgBar">
   <button id="wInline" title="Inline with text"><svg viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><rect x="4" y="11" width="8" height="7" rx="1"/><line x1="15" y1="13" x2="20" y2="13"/><line x1="15" y1="17" x2="20" y2="17"/></svg></button>
@@ -1709,7 +1806,11 @@ public sealed partial class MainWindow : Window
  function snap(){var s=getSelection();if(s.rangeCount&&ed.contains(s.anchorNode))savedRange=s.getRangeAt(0).cloneRange();}
  document.addEventListener('selectionchange',function(){if(document.activeElement===ed)snap();});
  var t=null,curId=0;
- function save(){clearTimeout(t);t=setTimeout(function(){post({type:'save',id:curId,html:ed.innerHTML,text:ed.innerText});},400);}
+ // Plain text for search/export: render equations as their LaTeX source, not the KaTeX glyph soup.
+ function noteText(){try{var c=ed.cloneNode(true);var ms=c.querySelectorAll('.mathnode');
+   for(var i=0;i<ms.length;i++)ms[i].textContent=' '+(ms[i].getAttribute('data-latex')||'')+' ';
+   return c.innerText||c.textContent||'';}catch(e){return ed.innerText;}}
+ function save(){clearTimeout(t);t=setTimeout(function(){post({type:'save',id:curId,html:ed.innerHTML,text:noteText()});},400);}
  ed.addEventListener('input',function(){clearJump();save();});
  // Tags kept when pasting rich web content; others are unwrapped (children kept) or
  // dropped (script/style/etc.) so a page's CSS/JS can't leak into or break the editor.
@@ -1731,6 +1832,17 @@ public sealed partial class MainWindow : Window
      if(c.nodeType!==1)continue;
      var tag=c.tagName;
      if(PASTE_DROP[tag])continue;
+     // Math pasted from Copilot/ChatGPT/Claude: use the LaTeX annotation if present, else convert
+     // the MathML back to LaTeX, so we can render it with KaTeX (and keep it editable).
+     if((c.classList&&(c.classList.contains('katex')||c.classList.contains('katex-display')))||tag==='MATH'){
+       var mnode=(tag==='MATH')?c:(c.querySelector&&c.querySelector('math'));
+       var ann=c.querySelector&&c.querySelector('annotation[encoding="application/x-tex"]');
+       var tex=ann?(ann.textContent||'').trim():(mnode?mml2tex(mnode).trim():'');
+       if(tex){
+         var disp=!!(c.classList&&c.classList.contains('katex-display'))||(mnode&&mnode.getAttribute('display')==='block');
+         dst.appendChild(document.createTextNode(disp?(' $$ '+tex+' $$ '):(' \\( '+tex+' \\) ')));continue;
+       }
+     }
      if(tag==='A'){
        // Keep only genuine INLINE links. Sites often wrap the whole article in one <a>,
        // which the browser flattens — turning every heading into same-size blue text.
@@ -1797,6 +1909,7 @@ public sealed partial class MainWindow : Window
          if(/^(https?:|data:image\/)/i.test(src)){var tok='pi'+(imgSeq++);imgs[j].setAttribute('data-tok',tok);jobs.push([tok,src]);}
        }
        document.execCommand('insertHTML',false,box.innerHTML);
+       renderMathIn(ed);
        for(var k=0;k<jobs.length;k++)post({type:'pasteimg',src:jobs[k][1],data:jobs[k][0]});
        post({type:'pasted',text:autoTitle()});save();return;
      }
@@ -1805,9 +1918,12 @@ public sealed partial class MainWindow : Window
    e.preventDefault();
    var txt=cd?cd.getData('text'):'';
    document.execCommand('insertText',false,txt);
-   post({type:'pasted',text:autoTitle()});
+   renderMathIn(ed);
+   post({type:'pasted',text:autoTitle()});save();
  });
  ed.addEventListener('click',function(e){
+   var mn=e.target&&e.target.closest?e.target.closest('.mathnode'):null;
+   if(mn){e.preventDefault();openMathEditor(mn);return;}
    var a=e.target&&e.target.closest?e.target.closest('a'):null;
    if(a){e.preventDefault();
      if(a.classList.contains('wl')){var id=parseInt(a.getAttribute('data-id'),10);if(id)post({type:'opennote',id:id});}
@@ -2020,6 +2136,7 @@ public sealed partial class MainWindow : Window
    selImg=null;placeImgUi();           // drop image selection from the previous note
    try{findClose();}catch(e){}         // clear any find highlights from the previous note
    ed.innerHTML=html||'';
+   try{renderMathIn(ed);}catch(e){}    // render any LaTeX in the loaded note
    setTimeout(countWC,0);
    ed.spellcheck=!!o.spell;
    document.documentElement.style.setProperty('--rule',o.rule);
@@ -2207,6 +2324,120 @@ public sealed partial class MainWindow : Window
    wc.textContent=words+' words · '+chars+' chars';
  }
  ed.addEventListener('input',countWC);
+ // ---- Math (KaTeX): render LaTeX pasted from AI chats + insert/edit equations --------
+ function mkMath(latex,disp){
+   var s=document.createElement('span');
+   s.className='mathnode';s.setAttribute('contenteditable','false');
+   s.setAttribute('data-latex',latex);s.setAttribute('data-display',disp?'1':'0');
+   try{s.innerHTML=katex.renderToString(latex,{displayMode:!!disp,throwOnError:false,output:'html'});}
+   catch(e){s.textContent=(disp?'$$':'$')+latex+(disp?'$$':'$');}
+   return s;
+ }
+ // Convert pasted MathML (Copilot/ChatGPT/Claude render KaTeX as MathML, often with no LaTeX
+ // annotation) back into LaTeX so we can render it with KaTeX and keep it editable.
+ var MFUNCS={sin:1,cos:1,tan:1,cot:1,sec:1,csc:1,sinh:1,cosh:1,tanh:1,ln:1,log:1,exp:1,det:1,lim:1,max:1,min:1,arg:1,gcd:1,deg:1};
+ var MOPS={'−':'-','–':'-','×':'\\times ','⋅':'\\cdot ','·':'\\cdot ','∞':'\\infty ','∫':'\\int ','∑':'\\sum ','∏':'\\prod ','≤':'\\le ','≥':'\\ge ','≠':'\\ne ','≈':'\\approx ','→':'\\to ','∈':'\\in ','∂':'\\partial ','±':'\\pm ','∓':'\\mp ','∇':'\\nabla ','√':'\\sqrt ','π':'\\pi ','θ':'\\theta ','α':'\\alpha ','β':'\\beta ','γ':'\\gamma ','λ':'\\lambda ','μ':'\\mu ','σ':'\\sigma ','Σ':'\\Sigma ','Δ':'\\Delta ','Ω':'\\Omega '};
+ function mop(s){s=(s||'').replace(/[⁡-⁤\s]+/g,'');if(s==='')return '';return MOPS[s]!==undefined?MOPS[s]:s;}
+ function mel(node){var e=[];for(var i=0;i<node.childNodes.length;i++)if(node.childNodes[i].nodeType===1)e.push(node.childNodes[i]);return e;}
+ var BRACKET={'[':'bmatrix','(':'pmatrix','|':'vmatrix','∥':'Vmatrix','{':'Bmatrix'};
+ function isMo(el){return el&&el.nodeType===1&&/^mo$/i.test((el.tagName||'').replace(/^[^:]*:/,''));}
+ function matrixRows(node){var ch=mel(node),rows=[];for(var r=0;r<ch.length;r++){if(!/mtr/i.test(ch[r].tagName))continue;
+   var cells=mel(ch[r]).map(function(td){return mml2tex(td);});rows.push(cells.join(' & '));}return rows.join(' \\\\ ');}
+ // Merge a  mo("[") + mtable + mo("]")  run into \begin{bmatrix}…\end{bmatrix} so brackets stretch.
+ function mrowTex(node){
+   var kids=[];for(var i=0;i<node.childNodes.length;i++){var cn=node.childNodes[i];
+     if(cn.nodeType===1||(cn.nodeType===3&&/\S/.test(cn.nodeValue)))kids.push(cn);}
+   var out='';
+   for(var i=0;i<kids.length;i++){var el=kids[i];
+     if(isMo(el)){
+       var op=(el.textContent||'').replace(/[⁡-⁤\s]+/g,''),env=BRACKET[op];
+       if(env&&kids[i+1]&&kids[i+1].nodeType===1&&/mtable/i.test(kids[i+1].tagName)){
+         out+='\\begin{'+env+'}'+matrixRows(kids[i+1])+'\\end{'+env+'}';
+         i++; if(isMo(kids[i+1]))i++;   // consume the closing bracket
+         continue;
+       }
+     }
+     out+=mml2tex(el);
+   }
+   return out;
+ }
+ function mml2tex(node){
+   if(!node)return '';
+   if(node.nodeType===3)return node.nodeValue.replace(/\s+/g,' ');
+   if(node.nodeType!==1)return '';
+   var tag=(node.tagName||'').toLowerCase().replace(/^[^:]*:/,'');
+   var ch=mel(node);
+   function all(){var s='';for(var i=0;i<node.childNodes.length;i++)s+=mml2tex(node.childNodes[i]);return s;}
+   function c(i){return ch[i]?mml2tex(ch[i]):'';}
+   switch(tag){
+     case 'math': case 'semantics': case 'mrow': case 'mstyle': case 'mpadded': return mrowTex(node);
+     case 'annotation': case 'annotation-xml': return '';
+     case 'mi': var t=node.textContent; if(MFUNCS[t])return '\\'+t+' '; return t.length>1?('\\mathrm{'+t+'}'):mop(t);
+     case 'mn': return node.textContent;
+     case 'mo': return mop(node.textContent);
+     case 'mtext': return '\\text{'+node.textContent+'}';
+     case 'mspace': return ' ';
+     case 'msup': return '{'+c(0)+'}^{'+c(1)+'}';
+     case 'msub': return '{'+c(0)+'}_{'+c(1)+'}';
+     case 'msubsup': return '{'+c(0)+'}_{'+c(1)+'}^{'+c(2)+'}';
+     case 'mfrac': return '\\frac{'+c(0)+'}{'+c(1)+'}';
+     case 'msqrt': return '\\sqrt{'+all()+'}';
+     case 'mroot': return '\\sqrt['+c(1)+']{'+c(0)+'}';
+     case 'munderover': return c(0)+'_{'+c(1)+'}^{'+c(2)+'}';
+     case 'munder': return c(0)+'_{'+c(1)+'}';
+     case 'mover': return c(0)+'^{'+c(1)+'}';
+     case 'mfenced': return '\\left('+all()+'\\right)';
+     case 'mtable': return '\\begin{matrix}'+matrixRows(node)+'\\end{matrix}';
+     case 'mtd': case 'mphantom': return all();
+     default: return all();
+   }
+ }
+ function findMath(str){
+   var pats=[{re:/\$\$([\s\S]+?)\$\$/,d:1},{re:/\\\[([\s\S]+?)\\\]/,d:1},{re:/\\\(([\s\S]+?)\\\)/,d:0},{re:/\$([^$\n]+?)\$/,d:0,g:1}];
+   var best=null;
+   for(var i=0;i<pats.length;i++){var m=pats[i].re.exec(str);if(!m)continue;
+     if(pats[i].g&&!/[\\_^{}]/.test(m[1]))continue;      // inline $..$ must look like LaTeX (skip currency)
+     if(!best||m.index<best.index)best={index:m.index,len:m[0].length,latex:m[1].trim(),d:pats[i].d};}
+   return best;
+ }
+ function skipMath(node){var p=node.parentNode;while(p&&p!==ed){if(p.classList&&p.classList.contains('mathnode'))return true;
+   if(p.tagName==='PRE'||p.tagName==='CODE'||p.tagName==='A')return true;p=p.parentNode;}return false;}
+ function processTextNode(node){
+   if(!node.nodeValue||skipMath(node))return;
+   var m=findMath(node.nodeValue);if(!m)return;
+   var after=node.splitText(m.index);after.nodeValue=after.nodeValue.slice(m.len);
+   after.parentNode.insertBefore(mkMath(m.latex,m.d),after);
+   processTextNode(after);
+ }
+ function renderMathIn(root){
+   if(typeof katex==='undefined')return;
+   var w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,null),n,list=[];
+   while(n=w.nextNode())if(/[$\\]/.test(n.nodeValue||''))list.push(n);
+   list.forEach(processTextNode);
+ }
+ var mathTarget=null,mIn=document.getElementById('mathIn'),mPrev=document.getElementById('mathPrev'),
+     mDisp=document.getElementById('mathDisp'),mBox=document.getElementById('mathEdit');
+ function mathPreview(){try{mPrev.innerHTML=katex.renderToString(mIn.value||'',{displayMode:mDisp.checked,throwOnError:false,output:'html'});}catch(e){mPrev.textContent='…';}}
+ function openMathEditor(node){
+   snap();mathTarget=node||null;
+   mIn.value=node?(node.getAttribute('data-latex')||''):'';
+   mDisp.checked=node?node.getAttribute('data-display')==='1':false;
+   document.getElementById('mathDel').style.display=node?'':'none';
+   document.getElementById('mathOk').textContent=node?'Update':'Insert';
+   mBox.style.display='block';mathPreview();setTimeout(function(){mIn.focus();},0);
+ }
+ function closeMathEditor(){mBox.style.display='none';mathTarget=null;}
+ mIn.addEventListener('input',mathPreview);mDisp.addEventListener('change',mathPreview);
+ document.getElementById('mathCancel').onclick=closeMathEditor;
+ document.getElementById('mathDel').onclick=function(){if(mathTarget&&mathTarget.parentNode)mathTarget.parentNode.removeChild(mathTarget);closeMathEditor();save();};
+ document.getElementById('mathOk').onclick=function(){
+   var tex=(mIn.value||'').trim();if(!tex){closeMathEditor();return;}
+   var node=mkMath(tex,mDisp.checked);
+   if(mathTarget&&mathTarget.parentNode){mathTarget.parentNode.replaceChild(node,mathTarget);}
+   else{ed.focus();restore();var s=getSelection();if(s.rangeCount){var r=s.getRangeAt(0);r.deleteContents();r.insertNode(node);r.setStartAfter(node);r.collapse(true);s.removeAllRanges();s.addRange(r);}else{ed.appendChild(node);}}
+   closeMathEditor();snap();save();
+ };
+ document.addEventListener('keydown',function(e){if(e.key==='Escape'&&mBox.style.display==='block'){closeMathEditor();}});
  post({type:'ready'});
 </script></body></html>
 """;
@@ -2565,6 +2796,9 @@ public sealed partial class MainWindow : Window
     private void ColorGreen_Click(object s, RoutedEventArgs e)   => EditorExec("foreColor", "#107c10");
     private void ColorBlue_Click(object s, RoutedEventArgs e)    => EditorExec("foreColor", "#0078d4");
     private void ColorOrange_Click(object s, RoutedEventArgs e)  => EditorExec("foreColor", "#ca5010");
+
+    private void InsertEquation_Click(object s, RoutedEventArgs e)
+        => _ = NoteWeb.CoreWebView2?.ExecuteScriptAsync("openMathEditor(null)");
 
     private void Quote_Click(object s, RoutedEventArgs e)   => EditorExec("formatBlock", "BLOCKQUOTE");
     private void Code_Click(object s, RoutedEventArgs e)    => EditorExec("formatBlock", "PRE");
