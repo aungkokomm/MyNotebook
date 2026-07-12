@@ -554,6 +554,7 @@ public sealed partial class MainWindow : Window
         AddItem(menu, "Open", () => ShowNote(id));
         AddItem(menu, pinned ? "Unpin" : "Pin", () => { _notes.SetPinned(id, !pinned); PopulateNoteList(); });
         AddItem(menu, "Rename", () => _ = RenameNotePrompt(id));
+        AddItem(menu, "Duplicate", () => DuplicateNote(id));
         var moveTo = new MenuFlyoutSubItem { Text = "Move to" };
         var unfiled = new MenuFlyoutItem { Text = "Unfiled" };
         unfiled.Click += (_, _) => MoveNote(id, null);
@@ -577,6 +578,62 @@ public sealed partial class MainWindow : Window
         menu.Items.Add(new MenuFlyoutSeparator());
         AddItem(menu, "Delete", () => _ = DeleteNotePrompt(id, NoteTitleOf(id)));
         return menu;
+    }
+
+    /// <summary>Make a copy of a note (its own image files, so deleting one never breaks the other).</summary>
+    private void DuplicateNote(long id)
+    {
+        var n = _notes.GetNote(id);
+        if (n is null) return;
+        var copy = _notes.CreateNote(EffectiveTitle(n) + " (copy)", n.Type, n.FolderId);
+        copy.BodyRtf = n.BodyRtf ?? "";
+        copy.BodyPlain = n.BodyPlain ?? "";
+
+        if (n.Type == NoteType.Thread)
+        {
+            foreach (var img in _notes.ListImages(n.Id))
+            {
+                try
+                {
+                    var srcAbs = _paths.ToAbsolute(img.RelPath);
+                    if (!File.Exists(srcAbs)) continue;
+                    var newRel = _paths.NewScreenshotRelPath(copy.Id).Replace('\\', '/');
+                    var newAbs = _paths.ToAbsolute(newRel);
+                    Directory.CreateDirectory(Path.GetDirectoryName(newAbs)!);
+                    File.Copy(srcAbs, newAbs, true);
+                    _notes.AddImage(copy.Id, newRel, img.Width, img.Height, img.OcrText, img.Caption);
+                }
+                catch { }
+            }
+        }
+        else if (copy.BodyRtf.Contains("attachments/"))
+        {
+            var map = new Dictionary<string, string>();
+            foreach (System.Text.RegularExpressions.Match m in
+                     System.Text.RegularExpressions.Regex.Matches(copy.BodyRtf, "data-rel=\"(attachments/[^\"]+)\""))
+            {
+                var oldRel = m.Groups[1].Value;
+                if (map.ContainsKey(oldRel)) continue;
+                try
+                {
+                    var srcAbs = _paths.ToAbsolute(oldRel);
+                    if (!File.Exists(srcAbs)) continue;
+                    var newRel = _paths.NewScreenshotRelPath(copy.Id).Replace('\\', '/');
+                    var newAbs = _paths.ToAbsolute(newRel);
+                    Directory.CreateDirectory(Path.GetDirectoryName(newAbs)!);
+                    File.Copy(srcAbs, newAbs, true);
+                    _notes.AddImage(copy.Id, newRel, 0, 0);
+                    map[oldRel] = newRel;
+                }
+                catch { }
+            }
+            foreach (var kv in map) copy.BodyRtf = copy.BodyRtf.Replace(kv.Key, kv.Value);
+        }
+
+        _notes.UpdateNote(copy);
+        PopulateNoteList();
+        SelectNoteInList(copy.Id);
+        ShowNote(copy.Id);
     }
 
     private string NoteTitleOf(long id)
@@ -1293,6 +1350,7 @@ public sealed partial class MainWindow : Window
             core.Settings.AreBrowserAcceleratorKeysEnabled = false;
             core.Settings.IsStatusBarEnabled = false;
             core.WebMessageReceived += OnWebMessage;
+            core.ContextMenuRequested += OnEditorContextMenu;
             core.NavigateToString(EditorHtml);
         }
         catch (Exception ex)
@@ -1638,6 +1696,41 @@ public sealed partial class MainWindow : Window
         {
             return bytes;   // keep the original on any decode/encode failure
         }
+    }
+
+    // A clean right-click menu for the editor: keep only the text-editing commands and add
+    // "Paste as plain text" (drops formatting), which the default menu doesn't offer.
+    private void OnEditorContextMenu(CoreWebView2 sender, CoreWebView2ContextMenuRequestedEventArgs e)
+    {
+        try
+        {
+            var items = e.MenuItems;
+            var keep = new HashSet<string> { "undo", "redo", "cut", "copy", "paste", "selectAll" };
+            for (int i = items.Count - 1; i >= 0; i--)
+                if (!keep.Contains(items[i].Name)) items.RemoveAt(i);
+
+            var plain = sender.Environment.CreateContextMenuItem(
+                "Paste as plain text", null, CoreWebView2ContextMenuItemKind.Command);
+            plain.CustomItemSelected += (_, _) => { _ = PastePlainAsync(); };
+
+            int idx = -1;
+            for (int i = 0; i < items.Count; i++) if (items[i].Name == "paste") { idx = i + 1; break; }
+            if (idx >= 0) items.Insert(idx, plain); else items.Add(plain);
+        }
+        catch { /* fall back to the default menu */ }
+    }
+
+    private async Task PastePlainAsync()
+    {
+        try
+        {
+            var content = Windows.ApplicationModel.DataTransfer.Clipboard.GetContent();
+            if (!content.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.Text)) return;
+            var text = await content.GetTextAsync();
+            if (NoteWeb.CoreWebView2 is not null)
+                await NoteWeb.CoreWebView2.ExecuteScriptAsync($"insertPlainText({JsonSerializer.Serialize(text)})");
+        }
+        catch { }
     }
 
     /// <summary>Run a contenteditable execCommand (or helper) in the web editor.</summary>
@@ -2027,6 +2120,18 @@ public sealed partial class MainWindow : Window
 
  // --- drag the picture body to move it within the text (marker shows the drop point) ---
  ed.addEventListener('dragstart',function(e){if(e.target&&e.target.tagName==='IMG')e.preventDefault();});  // suppress native image drag
+ // Drop image files from Explorer straight into the note (saved locally, inserted at the drop point).
+ function hasFiles(dt){return dt&&dt.types&&[].indexOf.call(dt.types,'Files')>=0;}
+ ed.addEventListener('dragover',function(e){if(hasFiles(e.dataTransfer))e.preventDefault();});
+ ed.addEventListener('drop',function(e){
+   var dt=e.dataTransfer;if(!dt||!dt.files||!dt.files.length)return;
+   var imgs=[];for(var i=0;i<dt.files.length;i++)if(/^image\//.test(dt.files[i].type))imgs.push(dt.files[i]);
+   if(!imgs.length)return;
+   e.preventDefault();
+   var r=document.caretRangeFromPoint&&document.caretRangeFromPoint(e.clientX,e.clientY);
+   if(r){var s=getSelection();s.removeAllRanges();s.addRange(r);snap();}
+   imgs.forEach(function(f){var fr=new FileReader();fr.onload=function(){post({type:'img',data:fr.result});};fr.readAsDataURL(f);});
+ });
  ed.addEventListener('dblclick',function(e){if(e.target&&e.target.tagName==='IMG'){e.preventDefault();post({type:'open',src:e.target.getAttribute('data-rel')});}});
  var mv=null;
  function caretFrom(x,y){
@@ -2080,6 +2185,35 @@ public sealed partial class MainWindow : Window
      if(e.key==='Escape'){e.preventDefault();closeWl();return;}
    }
    if((e.ctrlKey||e.metaKey)&&e.shiftKey&&(e.key==='v'||e.key==='V')){plainNext=true;setTimeout(function(){plainNext=false;},500);return;}
+   if((e.ctrlKey||e.metaKey)&&e.altKey){var ak=(e.key||'').toLowerCase();   // headings, Word-style
+     if(ak==='1'){e.preventDefault();exec('formatBlock','H1');return;}
+     if(ak==='2'){e.preventDefault();exec('formatBlock','H2');return;}
+     if(ak==='0'){e.preventDefault();exec('formatBlock','P');return;}
+   }
+   if((e.ctrlKey||e.metaKey)&&!e.altKey){var kk=(e.key||'').toLowerCase();   // Word-style formatting shortcuts
+     if(!e.shiftKey){
+       if(kk==='b'){e.preventDefault();exec('bold');return;}
+       if(kk==='i'){e.preventDefault();exec('italic');return;}
+       if(kk==='u'){e.preventDefault();exec('underline');return;}
+       if(kk==='z'){e.preventDefault();exec('undo');return;}
+       if(kk==='y'){e.preventDefault();exec('redo');return;}
+       if(kk==='l'){e.preventDefault();exec('justifyLeft');return;}
+       if(kk==='e'){e.preventDefault();exec('justifyCenter');return;}
+       if(kk==='r'){e.preventDefault();exec('justifyRight');return;}
+       if(kk==='j'){e.preventDefault();exec('justifyFull');return;}
+       if(kk==='m'){e.preventDefault();exec('indent');return;}
+       if(kk==='='){e.preventDefault();exec('subscript');return;}
+       if(kk==='\\'){e.preventDefault();exec('removeFormat');return;}
+     }else{
+       if(kk==='z'){e.preventDefault();exec('redo');return;}
+       if(kk==='x'){e.preventDefault();exec('strikeThrough');return;}
+       if(kk==='m'){e.preventDefault();exec('outdent');return;}
+       if(kk==='='||kk==='+'){e.preventDefault();exec('superscript');return;}
+       if(kk==='7'){e.preventDefault();exec('insertOrderedList');return;}
+       if(kk==='8'){e.preventDefault();exec('insertUnorderedList');return;}
+       if(kk==='9'){e.preventDefault();ed.focus();restore();document.execCommand('insertText',false,'☐ ');snap();save();return;}
+     }
+   }
    if(e.ctrlKey&&(e.key==='f'||e.key==='F'||e.key==='k'||e.key==='K')){e.preventDefault();post({type:'focussearch'});}
    else if(e.ctrlKey&&(e.key==='h'||e.key==='H')){e.preventDefault();post({type:'find'});}
    else if(e.key==='F11'){e.preventDefault();post({type:'togglefocus'});}
@@ -2274,6 +2408,7 @@ public sealed partial class MainWindow : Window
  }
  ed.addEventListener('keydown',function(e){if(e.key===' '&&mdSpace())e.preventDefault();});
  function setSpell(on){ed.spellcheck=!!on;}
+ function insertPlainText(t){ed.focus();restore();document.execCommand('insertText',false,t||'');post({type:'pasted',text:autoTitle()});save();}
  // Localize UI strings that live inside the editor (placeholder + image toolbar tooltips).
  function setLocale(o){
    try{
@@ -2765,6 +2900,9 @@ public sealed partial class MainWindow : Window
     }
 
     // ----------------------------------------- Editor formatting (drives WebView2)
+    private void Undo_Click(object s, RoutedEventArgs e)     => EditorExec("undo");
+    private void Redo_Click(object s, RoutedEventArgs e)     => EditorExec("redo");
+
     private void Bold_Click(object s, RoutedEventArgs e)      => EditorExec("bold");
     private void Italic_Click(object s, RoutedEventArgs e)    => EditorExec("italic");
     private void Underline_Click(object s, RoutedEventArgs e) => EditorExec("underline");
@@ -2799,6 +2937,28 @@ public sealed partial class MainWindow : Window
 
     private void InsertEquation_Click(object s, RoutedEventArgs e)
         => _ = NoteWeb.CoreWebView2?.ExecuteScriptAsync("openMathEditor(null)");
+
+    private async void InsertImageFile_Click(object s, RoutedEventArgs e)
+    {
+        if (_current is null) return;
+        var picker = new Windows.Storage.Pickers.FileOpenPicker
+            { SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.PicturesLibrary };
+        foreach (var ext in new[] { ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp" }) picker.FileTypeFilter.Add(ext);
+        InitializeWithWindow(picker);
+        var file = await picker.PickSingleFileAsync();
+        if (file is null) return;
+        try
+        {
+            var bytes = await File.ReadAllBytesAsync(file.Path);
+            var mime = file.FileType.ToLowerInvariant() switch
+            {
+                ".png" => "image/png", ".gif" => "image/gif", ".webp" => "image/webp", ".bmp" => "image/bmp",
+                _ => "image/jpeg"
+            };
+            await HandleWebPasteImage($"data:{mime};base64,{Convert.ToBase64String(bytes)}");
+        }
+        catch (Exception ex) { Debug.WriteLine("insert image failed: " + ex); }
+    }
 
     private void Quote_Click(object s, RoutedEventArgs e)   => EditorExec("formatBlock", "BLOCKQUOTE");
     private void Code_Click(object s, RoutedEventArgs e)    => EditorExec("formatBlock", "PRE");

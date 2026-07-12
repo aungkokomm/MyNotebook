@@ -394,6 +394,14 @@
                       <StackPanel Orientation="Vertical" Spacing="4">
                         <!-- Row 1: text formatting -->
                         <StackPanel Orientation="Horizontal" Spacing="1" VerticalAlignment="Center">
+                            <!-- Undo / redo -->
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Undo (Ctrl+Z)" Click="Undo_Click">
+                                <FontIcon Glyph="&#xE7A7;" FontSize="15" />
+                            </Button>
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Redo (Ctrl+Y)" Click="Redo_Click">
+                                <FontIcon Glyph="&#xE7A6;" FontSize="15" />
+                            </Button>
+                            <Rectangle Style="{StaticResource FmtSeparator}" />
                             <!-- Paragraph -->
                             <Button Width="Auto" Height="32" Padding="8,0" CornerRadius="6"
                                     Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Paragraph styles">
@@ -487,24 +495,29 @@
                         <!-- Row 2: paragraph, structure & insert -->
                         <StackPanel Orientation="Horizontal" Spacing="1" VerticalAlignment="Center">
                             <!-- Alignment -->
-                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Align left" Click="AlignLeft_Click">
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Align left (Ctrl+L)" Click="AlignLeft_Click">
                                 <FontIcon Glyph="&#xE8E4;" FontSize="15" />
                             </Button>
-                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Align center" Click="AlignCenter_Click">
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Align center (Ctrl+E)" Click="AlignCenter_Click">
                                 <FontIcon Glyph="&#xE8E3;" FontSize="15" />
                             </Button>
-                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Align right" Click="AlignRight_Click">
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Align right (Ctrl+R)" Click="AlignRight_Click">
                                 <FontIcon Glyph="&#xE8E2;" FontSize="15" />
                             </Button>
-                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Justify" Click="AlignJustify_Click">
-                                <TextBlock Text="&#x2261;" FontSize="16" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Justify (Ctrl+J)" Click="AlignJustify_Click">
+                                <StackPanel Width="15" Spacing="2.5" VerticalAlignment="Center">
+                                    <Rectangle Height="1.6" RadiusX="1" RadiusY="1" Fill="{ThemeResource TextFillColorPrimaryBrush}" />
+                                    <Rectangle Height="1.6" RadiusX="1" RadiusY="1" Fill="{ThemeResource TextFillColorPrimaryBrush}" />
+                                    <Rectangle Height="1.6" RadiusX="1" RadiusY="1" Fill="{ThemeResource TextFillColorPrimaryBrush}" />
+                                    <Rectangle Height="1.6" RadiusX="1" RadiusY="1" Fill="{ThemeResource TextFillColorPrimaryBrush}" />
+                                </StackPanel>
                             </Button>
                             <Rectangle Style="{StaticResource FmtSeparator}" />
                             <!-- Indent -->
-                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Increase indent" Click="Indent_Click">
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Increase indent (Ctrl+M)" Click="Indent_Click">
                                 <TextBlock Text="&#x21E5;" FontSize="15" VerticalAlignment="Center" HorizontalAlignment="Center" />
                             </Button>
-                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Decrease indent" Click="Outdent_Click">
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Decrease indent (Ctrl+Shift+M)" Click="Outdent_Click">
                                 <TextBlock Text="&#x21E4;" FontSize="15" VerticalAlignment="Center" HorizontalAlignment="Center" />
                             </Button>
                             <Rectangle Style="{StaticResource FmtSeparator}" />
@@ -562,6 +575,9 @@
                             <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Insert equation (math)" Click="InsertEquation_Click">
                                 <TextBlock Text="fx" FontFamily="Georgia" FontStyle="Italic" FontSize="15"
                                            VerticalAlignment="Center" HorizontalAlignment="Center" />
+                            </Button>
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Insert picture from a file" Click="InsertImageFile_Click">
+                                <FontIcon Glyph="&#xE91B;" FontSize="15" />
                             </Button>
                         </StackPanel>
                       </StackPanel>

@@ -82,11 +82,11 @@ including in Burmese and inside screenshots, that gap is the reason this exists.
 
 | | |
 |---|---|
-| 🗂️ **Workspace** | Two-pane drawer (folders plus note list), collapsible panels, multi-select with bulk move/pin/delete, drag-to-folder, sort |
-| ✍️ **Rich editor** | Headings and styles, bold/italic/underline/strike, super and subscript, text color, highlight, fonts, alignment, indent, clear formatting, bullet/numbered/checklists, quote, code block, divider, and markdown shortcuts |
+| 🗂️ **Workspace** | Two-pane drawer (folders plus note list), collapsible panels, multi-select with bulk move/pin/delete, drag-to-folder, duplicate, sort |
+| ✍️ **Rich editor** | Undo/redo, headings and styles, bold/italic/underline/strike, super and subscript, text color, highlight, fonts, alignment, indent, clear formatting, bullet/numbered/checklists, quote, code block, divider, markdown shortcuts, and Word-style keyboard shortcuts |
 | 🔢 **Tables & links** | Insert and edit tables (add or remove rows and columns, header row), hyperlinks, `[[wiki-links]]`, and backlinks |
 | 🧮 **Math (KaTeX)** | Paste equations from AI chats and they render (LaTeX or MathML, including fractions, integrals, sums, and matrices); insert and edit your own with a live preview; fully offline |
-| 🖼️ **Images** | Paste full-resolution inline, resize from corners with snapping, wrap text (inline / left / right / own line), drag to reposition, transparent-PNG friendly, 100% floating viewer |
+| 🖼️ **Images** | Paste full-resolution inline, insert from a file, or drag and drop from Explorer; resize from corners with snapping, wrap text (inline / left / right / own line), drag to reposition, transparent-PNG friendly, 100% floating viewer |
 | 🖼️ **Screenshot threads** | Paste (Ctrl+V) into a connected **timeline rail** of numbered nodes, drag-to-reorder, OCR-indexed, export all |
 | 🔎 **Search** | Hybrid FTS5 plus trigram (Myanmar, substring, and OCR text), operators, highlighted results, jump-to-match |
 | 🔗 **Web clipper** | OneNote-style paste that keeps the source URL, with the article's formatting and images kept offline |
@@ -183,7 +183,11 @@ next to the exe, falling back to `%LOCALAPPDATA%\MyNotebook` if that is read-onl
 |---|---|
 | `Ctrl+F` / `Ctrl+K` | Focus search |
 | `Ctrl+H` | Find and replace in the note |
+| `Ctrl+Z` / `Ctrl+Y` | Undo / redo |
 | `Ctrl+B` / `Ctrl+I` / `Ctrl+U` | Bold / italic / underline |
+| `Ctrl+L` / `Ctrl+E` / `Ctrl+R` / `Ctrl+J` | Align left / center / right / justify |
+| `Ctrl+M` / `Ctrl+Shift+M` | Increase / decrease indent |
+| `Ctrl+Alt+1` / `Ctrl+Alt+2` / `Ctrl+Alt+0` | Title / heading / body |
 | `Ctrl+N` | New note |
 | `Ctrl+T` | New screenshot thread |
 | `Ctrl+V` | Paste an image (inline in a note, or a card in a thread) |
