@@ -46,14 +46,15 @@ including in Burmese and inside screenshots, that gap is the reason this exists.
 ## 🖼️ Screenshots
 
 <p align="center">
- <img width="960" height="509" alt="image" src="https://github.com/user-attachments/assets/b19c7221-955b-4a22-9482-fd2f8acf2096" />
-
-<img width="960" height="510" alt="image" src="https://github.com/user-attachments/assets/084f4d92-a1ec-4f5f-9a2b-56d6bde6cd4c" />
-
+ 
+<img width="960" height="509" alt="image" src="https://github.com/user-attachments/assets/e8143a7c-c704-434c-b5a7-6487eedc1e7a" />
 
 <img width="464" height="401" alt="image" src="https://github.com/user-attachments/assets/3a069e2a-129d-40d9-a4d0-49f36948c153" />
 
 <img width="446" height="383" alt="image" src="https://github.com/user-attachments/assets/e5de20d1-087f-4de3-acdb-4e0b80f9bdb8" />
+
+<img width="406" height="399" alt="image" src="https://github.com/user-attachments/assets/556e7ecb-d845-48bd-bb50-fd2c7fd88b86" />
+
 </p>
 
 ## ✨ Why you'll like it
