@@ -26,6 +26,10 @@
                       Link="Migrations\003_search_trigram.sql" />
     <EmbeddedResource Include="..\..\db\migrations\004_timeline_index.sql"
                       Link="Migrations\004_timeline_index.sql" />
+    <EmbeddedResource Include="..\..\db\migrations\005_notebooks.sql"
+                      Link="Migrations\005_notebooks.sql" />
+    <EmbeddedResource Include="..\..\db\migrations\006_folder_color.sql"
+                      Link="Migrations\006_folder_color.sql" />
   </ItemGroup>
 
 </Project>

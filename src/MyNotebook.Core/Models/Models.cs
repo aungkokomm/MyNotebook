@@ -23,12 +23,30 @@ public static class NoteTypeExtensions
         string.Equals(s, "thread", StringComparison.OrdinalIgnoreCase) ? NoteType.Thread : NoteType.Note;
 }
 
+/// <summary>A top-level notebook (OneNote-style): the container above folders and notes.</summary>
+public sealed class Notebook
+{
+    public long Id { get; set; }
+    public string Guid { get; set; } = System.Guid.NewGuid().ToString();
+    public string Name { get; set; } = "";
+    /// <summary>Accent dot as #RRGGBB, or "" for none.</summary>
+    public string Color { get; set; } = "";
+    public int SortOrder { get; set; }
+    public long CreatedAt { get; set; }
+    public long UpdatedAt { get; set; }
+    public bool Deleted { get; set; }
+}
+
 public sealed class Folder
 {
     public long Id { get; set; }
     public string Guid { get; set; } = System.Guid.NewGuid().ToString();
     public string Name { get; set; } = "";
     public long? ParentId { get; set; }
+    /// <summary>Which notebook this folder belongs to.</summary>
+    public long? NotebookId { get; set; }
+    /// <summary>Accent color as #RRGGBB, or "" to follow the theme (OneNote-style section color).</summary>
+    public string Color { get; set; } = "";
     public int SortOrder { get; set; }
     public long CreatedAt { get; set; }
     public long UpdatedAt { get; set; }
@@ -40,6 +58,8 @@ public sealed class Note
     public long Id { get; set; }
     public string Guid { get; set; } = System.Guid.NewGuid().ToString();
     public long? FolderId { get; set; }
+    /// <summary>Which notebook this note belongs to (independent of folder, so unfiled notes still have a home).</summary>
+    public long? NotebookId { get; set; }
     public string Title { get; set; } = "";
     /// <summary>RichEditBox RTF — source of truth for formatting.</summary>
     public string BodyRtf { get; set; } = "";

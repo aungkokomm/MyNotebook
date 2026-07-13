@@ -13,17 +13,109 @@ public sealed class NoteService : INoteService
 
     private static long Now() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-    // ---------------------------------------------------------------- Folders
-    public Folder CreateFolder(string name, long? parentId = null)
+    // ------------------------------------------------------------- Notebooks
+    public Notebook CreateNotebook(string name, string color = "")
     {
-        var f = new Folder { Name = name, ParentId = parentId, CreatedAt = Now(), UpdatedAt = Now() };
+        var nb = new Notebook { Name = name, Color = color, CreatedAt = Now(), UpdatedAt = Now() };
         using var con = _storage.OpenConnection();
         using var cmd = con.CreateCommand();
-        cmd.CommandText = @"INSERT INTO Folders(guid,name,parent_id,sort_order,created_at,updated_at,deleted)
-                            VALUES($g,$n,$p,$s,$c,$u,0); SELECT last_insert_rowid();";
+        cmd.CommandText = @"INSERT INTO Notebooks(guid,name,color,sort_order,created_at,updated_at,deleted)
+                            VALUES($g,$n,$col,
+                              COALESCE((SELECT MAX(sort_order)+1 FROM Notebooks WHERE deleted=0),0),
+                              $c,$u,0); SELECT last_insert_rowid();";
+        cmd.Parameters.AddWithValue("$g", nb.Guid);
+        cmd.Parameters.AddWithValue("$n", nb.Name);
+        cmd.Parameters.AddWithValue("$col", nb.Color);
+        cmd.Parameters.AddWithValue("$c", nb.CreatedAt);
+        cmd.Parameters.AddWithValue("$u", nb.UpdatedAt);
+        nb.Id = (long)cmd.ExecuteScalar()!;
+        return nb;
+    }
+
+    public IReadOnlyList<Notebook> ListNotebooks()
+    {
+        using var con = _storage.OpenConnection();
+        using var cmd = con.CreateCommand();
+        cmd.CommandText = @"SELECT id,guid,name,color,sort_order,created_at,updated_at,deleted
+                            FROM Notebooks WHERE deleted=0 ORDER BY sort_order, name";
+        using var r = cmd.ExecuteReader();
+        var list = new List<Notebook>();
+        while (r.Read())
+            list.Add(new Notebook
+            {
+                Id = r.GetInt64(0), Guid = r.GetString(1), Name = r.GetString(2),
+                Color = r.GetString(3), SortOrder = r.GetInt32(4),
+                CreatedAt = r.GetInt64(5), UpdatedAt = r.GetInt64(6), Deleted = r.GetInt64(7) != 0,
+            });
+        return list;
+    }
+
+    public void RenameNotebook(long id, string name)
+    {
+        using var con = _storage.OpenConnection();
+        using var cmd = con.CreateCommand();
+        cmd.CommandText = "UPDATE Notebooks SET name=$n, updated_at=$u WHERE id=$id";
+        cmd.Parameters.AddWithValue("$n", name);
+        cmd.Parameters.AddWithValue("$u", Now());
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
+    }
+
+    public void SetNotebookColor(long id, string color)
+    {
+        using var con = _storage.OpenConnection();
+        using var cmd = con.CreateCommand();
+        cmd.CommandText = "UPDATE Notebooks SET color=$c, updated_at=$u WHERE id=$id";
+        cmd.Parameters.AddWithValue("$c", color ?? "");
+        cmd.Parameters.AddWithValue("$u", Now());
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
+    }
+
+    public void DeleteNotebook(long id)
+    {
+        using var con = _storage.OpenConnection();
+        using var tx = con.BeginTransaction();
+        var now = Now();
+        // Soft-delete the notebook, every folder in it, and every note in it (notes drop out of FTS).
+        foreach (var sql in new[]
+        {
+            "UPDATE Notes    SET deleted=1, updated_at=$u WHERE notebook_id=$id",
+            "UPDATE Folders  SET deleted=1, updated_at=$u WHERE notebook_id=$id",
+            "UPDATE Notebooks SET deleted=1, updated_at=$u WHERE id=$id",
+        })
+        {
+            using var cmd = con.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = sql;
+            cmd.Parameters.AddWithValue("$u", now);
+            cmd.Parameters.AddWithValue("$id", id);
+            cmd.ExecuteNonQuery();
+        }
+        tx.Commit();
+    }
+
+    public int NotebookNoteCount(long notebookId)
+    {
+        using var con = _storage.OpenConnection();
+        using var cmd = con.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM Notes WHERE notebook_id=$id AND deleted=0";
+        cmd.Parameters.AddWithValue("$id", notebookId);
+        return Convert.ToInt32(cmd.ExecuteScalar());
+    }
+
+    // ---------------------------------------------------------------- Folders
+    public Folder CreateFolder(string name, long? parentId = null, long? notebookId = null)
+    {
+        var f = new Folder { Name = name, ParentId = parentId, NotebookId = notebookId, CreatedAt = Now(), UpdatedAt = Now() };
+        using var con = _storage.OpenConnection();
+        using var cmd = con.CreateCommand();
+        cmd.CommandText = @"INSERT INTO Folders(guid,name,parent_id,notebook_id,sort_order,created_at,updated_at,deleted)
+                            VALUES($g,$n,$p,$nb,$s,$c,$u,0); SELECT last_insert_rowid();";
         cmd.Parameters.AddWithValue("$g", f.Guid);
         cmd.Parameters.AddWithValue("$n", f.Name);
         cmd.Parameters.AddWithValue("$p", (object?)f.ParentId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$nb", (object?)f.NotebookId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$s", f.SortOrder);
         cmd.Parameters.AddWithValue("$c", f.CreatedAt);
         cmd.Parameters.AddWithValue("$u", f.UpdatedAt);
@@ -37,6 +129,17 @@ public sealed class NoteService : INoteService
         using var cmd = con.CreateCommand();
         cmd.CommandText = "UPDATE Folders SET name=$n, updated_at=$u WHERE id=$id";
         cmd.Parameters.AddWithValue("$n", name);
+        cmd.Parameters.AddWithValue("$u", Now());
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
+    }
+
+    public void SetFolderColor(long id, string color)
+    {
+        using var con = _storage.OpenConnection();
+        using var cmd = con.CreateCommand();
+        cmd.CommandText = "UPDATE Folders SET color=$c, updated_at=$u WHERE id=$id";
+        cmd.Parameters.AddWithValue("$c", color ?? "");
         cmd.Parameters.AddWithValue("$u", Now());
         cmd.Parameters.AddWithValue("$id", id);
         cmd.ExecuteNonQuery();
@@ -78,23 +181,35 @@ public sealed class NoteService : INoteService
         tx.Commit();
     }
 
-    public void MoveNoteToFolder(long noteId, long? folderId)
+    public void MoveNoteToFolder(long noteId, long? folderId, long? notebookId = null)
     {
         using var con = _storage.OpenConnection();
         using var cmd = con.CreateCommand();
-        cmd.CommandText = "UPDATE Notes SET folder_id=$f, updated_at=$u WHERE id=$id";
+        // When a target folder is given, re-home the note into that folder's notebook so the two
+        // never disagree; an explicit notebookId (moving to Unfiled in a notebook) wins if provided.
+        cmd.CommandText = notebookId.HasValue
+            ? "UPDATE Notes SET folder_id=$f, notebook_id=$nb, updated_at=$u WHERE id=$id"
+            : folderId.HasValue
+                ? @"UPDATE Notes SET folder_id=$f,
+                        notebook_id=COALESCE((SELECT notebook_id FROM Folders WHERE id=$f), notebook_id),
+                        updated_at=$u WHERE id=$id"
+                : "UPDATE Notes SET folder_id=$f, updated_at=$u WHERE id=$id";
         cmd.Parameters.AddWithValue("$f", (object?)folderId ?? DBNull.Value);
+        if (notebookId.HasValue) cmd.Parameters.AddWithValue("$nb", notebookId.Value);
         cmd.Parameters.AddWithValue("$u", Now());
         cmd.Parameters.AddWithValue("$id", noteId);
         cmd.ExecuteNonQuery();
     }
 
-    public IReadOnlyList<Folder> ListFolders()
+    public IReadOnlyList<Folder> ListFolders(long? notebookId = null)
     {
         using var con = _storage.OpenConnection();
         using var cmd = con.CreateCommand();
-        cmd.CommandText = @"SELECT id,guid,name,parent_id,sort_order,created_at,updated_at,deleted
-                            FROM Folders WHERE deleted=0 ORDER BY sort_order, name";
+        cmd.CommandText = @"SELECT id,guid,name,parent_id,notebook_id,sort_order,created_at,updated_at,deleted,color
+                            FROM Folders WHERE deleted=0" +
+                          (notebookId.HasValue ? " AND notebook_id=$nb" : "") +
+                          " ORDER BY sort_order, name";
+        if (notebookId.HasValue) cmd.Parameters.AddWithValue("$nb", notebookId.Value);
         using var r = cmd.ExecuteReader();
         var list = new List<Folder>();
         while (r.Read())
@@ -105,33 +220,41 @@ public sealed class NoteService : INoteService
                 Guid = r.GetString(1),
                 Name = r.GetString(2),
                 ParentId = r.IsDBNull(3) ? null : r.GetInt64(3),
-                SortOrder = r.GetInt32(4),
-                CreatedAt = r.GetInt64(5),
-                UpdatedAt = r.GetInt64(6),
-                Deleted = r.GetInt64(7) != 0,
+                NotebookId = r.IsDBNull(4) ? null : r.GetInt64(4),
+                SortOrder = r.GetInt32(5),
+                CreatedAt = r.GetInt64(6),
+                UpdatedAt = r.GetInt64(7),
+                Deleted = r.GetInt64(8) != 0,
+                Color = r.IsDBNull(9) ? "" : r.GetString(9),
             });
         }
         return list;
     }
 
     // ------------------------------------------------------------------ Notes
-    public Note CreateNote(string title, NoteType type = NoteType.Note, long? folderId = null)
+    public Note CreateNote(string title, NoteType type = NoteType.Note, long? folderId = null, long? notebookId = null)
     {
         var n = new Note
         {
             Title = title,
             Type = type,
             FolderId = folderId,
+            NotebookId = notebookId,
             CreatedAt = Now(),
             UpdatedAt = Now(),
         };
         using var con = _storage.OpenConnection();
         using var cmd = con.CreateCommand();
-        cmd.CommandText = @"INSERT INTO Notes(guid,folder_id,title,body_rtf,body_plain,note_type,
+        // If a folder is given, inherit its notebook; else use the notebook passed in (or the first one).
+        cmd.CommandText = @"INSERT INTO Notes(guid,folder_id,notebook_id,title,body_rtf,body_plain,note_type,
                               pinned,sort_order,created_at,updated_at,deleted)
-                            VALUES($g,$f,$t,'','',$ty,0,0,$c,$u,0); SELECT last_insert_rowid();";
+                            VALUES($g,$f,
+                              COALESCE((SELECT notebook_id FROM Folders WHERE id=$f), $nb,
+                                       (SELECT id FROM Notebooks WHERE deleted=0 ORDER BY sort_order, id LIMIT 1)),
+                              $t,'','',$ty,0,0,$c,$u,0); SELECT last_insert_rowid();";
         cmd.Parameters.AddWithValue("$g", n.Guid);
         cmd.Parameters.AddWithValue("$f", (object?)n.FolderId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$nb", (object?)n.NotebookId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$t", n.Title);
         cmd.Parameters.AddWithValue("$ty", n.Type.ToDbValue());
         cmd.Parameters.AddWithValue("$c", n.CreatedAt);
@@ -144,7 +267,7 @@ public sealed class NoteService : INoteService
     {
         using var con = _storage.OpenConnection();
         using var cmd = con.CreateCommand();
-        cmd.CommandText = @"SELECT id,guid,folder_id,title,body_rtf,body_plain,note_type,
+        cmd.CommandText = @"SELECT id,guid,folder_id,notebook_id,title,body_rtf,body_plain,note_type,
                                    pinned,sort_order,created_at,updated_at,deleted
                             FROM Notes WHERE id=$id";
         cmd.Parameters.AddWithValue("$id", id);
@@ -194,15 +317,16 @@ public sealed class NoteService : INoteService
         cmd.ExecuteNonQuery();
     }
 
-    public IReadOnlyList<Note> ListNotes(long? folderId = null, bool includeDeleted = false)
+    public IReadOnlyList<Note> ListNotes(long? folderId = null, bool includeDeleted = false, long? notebookId = null)
     {
         using var con = _storage.OpenConnection();
         using var cmd = con.CreateCommand();
-        var sb = new StringBuilder(@"SELECT id,guid,folder_id,title,body_rtf,body_plain,note_type,
+        var sb = new StringBuilder(@"SELECT id,guid,folder_id,notebook_id,title,body_rtf,body_plain,note_type,
                                             pinned,sort_order,created_at,updated_at,deleted
                                      FROM Notes WHERE 1=1");
         if (!includeDeleted) sb.Append(" AND deleted=0");
         if (folderId.HasValue) { sb.Append(" AND folder_id=$f"); cmd.Parameters.AddWithValue("$f", folderId.Value); }
+        if (notebookId.HasValue) { sb.Append(" AND notebook_id=$nb"); cmd.Parameters.AddWithValue("$nb", notebookId.Value); }
         sb.Append(" ORDER BY pinned DESC, sort_order, updated_at DESC");
         cmd.CommandText = sb.ToString();
         using var r = cmd.ExecuteReader();
@@ -217,7 +341,7 @@ public sealed class NoteService : INoteService
         var col = axis == TimelineAxis.Created ? "created_at" : "updated_at";
         using var con = _storage.OpenConnection();
         using var cmd = con.CreateCommand();
-        cmd.CommandText = $@"SELECT id,guid,folder_id,title,body_rtf,body_plain,note_type,
+        cmd.CommandText = $@"SELECT id,guid,folder_id,notebook_id,title,body_rtf,body_plain,note_type,
                                     pinned,sort_order,created_at,updated_at,deleted
                              FROM Notes WHERE deleted=0 ORDER BY {col} DESC";
         using var r = cmd.ExecuteReader();
@@ -459,7 +583,7 @@ public sealed class NoteService : INoteService
     {
         using var con = _storage.OpenConnection();
         using var cmd = con.CreateCommand();
-        cmd.CommandText = @"SELECT n.id,n.guid,n.folder_id,n.title,n.body_rtf,n.body_plain,n.note_type,
+        cmd.CommandText = @"SELECT n.id,n.guid,n.folder_id,n.notebook_id,n.title,n.body_rtf,n.body_plain,n.note_type,
                                    n.pinned,n.sort_order,n.created_at,n.updated_at,n.deleted
                             FROM Notes n JOIN NoteTags nt ON nt.note_id=n.id
                             WHERE nt.tag_id=$t AND n.deleted=0
@@ -747,7 +871,7 @@ public sealed class NoteService : INoteService
     {
         using var con = _storage.OpenConnection();
         using var cmd = con.CreateCommand();
-        cmd.CommandText = @"SELECT id,guid,folder_id,title,body_rtf,body_plain,note_type,
+        cmd.CommandText = @"SELECT id,guid,folder_id,notebook_id,title,body_rtf,body_plain,note_type,
                                    pinned,sort_order,created_at,updated_at,deleted
                             FROM Notes WHERE deleted=1 ORDER BY updated_at DESC";
         using var r = cmd.ExecuteReader();
@@ -838,20 +962,27 @@ public sealed class NoteService : INoteService
         return list;
     }
 
+    // Column order (shared by every note SELECT below):
+    // 0 id, 1 guid, 2 folder_id, 3 notebook_id, 4 title, 5 body_rtf, 6 body_plain,
+    // 7 note_type, 8 pinned, 9 sort_order, 10 created_at, 11 updated_at, 12 deleted
+    private const string NoteCols =
+        "id,guid,folder_id,notebook_id,title,body_rtf,body_plain,note_type,pinned,sort_order,created_at,updated_at,deleted";
+
     private static Note ReadNote(SqliteDataReader r) => new()
     {
         Id = r.GetInt64(0),
         Guid = r.GetString(1),
         FolderId = r.IsDBNull(2) ? null : r.GetInt64(2),
-        Title = r.GetString(3),
-        BodyRtf = r.GetString(4),
-        BodyPlain = r.GetString(5),
-        Type = NoteTypeExtensions.ParseNoteType(r.GetString(6)),
-        Pinned = r.GetInt64(7) != 0,
-        SortOrder = r.GetInt32(8),
-        CreatedAt = r.GetInt64(9),
-        UpdatedAt = r.GetInt64(10),
-        Deleted = r.GetInt64(11) != 0,
+        NotebookId = r.IsDBNull(3) ? null : r.GetInt64(3),
+        Title = r.GetString(4),
+        BodyRtf = r.GetString(5),
+        BodyPlain = r.GetString(6),
+        Type = NoteTypeExtensions.ParseNoteType(r.GetString(7)),
+        Pinned = r.GetInt64(8) != 0,
+        SortOrder = r.GetInt32(9),
+        CreatedAt = r.GetInt64(10),
+        UpdatedAt = r.GetInt64(11),
+        Deleted = r.GetInt64(12) != 0,
     };
 }
 

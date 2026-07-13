@@ -45,6 +45,9 @@ public sealed class AppSettings
 
     /// <summary>UI language code ("en", "pt", …), or "" to follow the Windows display language.</summary>
     public string Language { get; set; } = "";
+
+    /// <summary>Id of the notebook shown on last launch, or 0 to fall back to the first notebook.</summary>
+    public long CurrentNotebookId { get; set; } = 0;
 }
 
 public interface ISettingsService

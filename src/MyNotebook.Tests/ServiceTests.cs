@@ -36,7 +36,7 @@ public class SchemaTests
     public void Initialize_sets_schema_version_to_current()
     {
         using var fx = new NotebookFixture();
-        Assert.Equal(4, fx.Storage.SchemaVersion);
+        Assert.Equal(6, fx.Storage.SchemaVersion);
     }
 
     [Fact]
@@ -44,7 +44,74 @@ public class SchemaTests
     {
         using var fx = new NotebookFixture();
         fx.Storage.Initialize(); // second call must not throw or duplicate
-        Assert.Equal(4, fx.Storage.SchemaVersion);
+        Assert.Equal(6, fx.Storage.SchemaVersion);
+    }
+
+    [Fact]
+    public void Migration_seeds_a_default_notebook()
+    {
+        using var fx = new NotebookFixture();
+        var nbs = fx.Notes.ListNotebooks();
+        Assert.Single(nbs);
+        Assert.Equal("My Notebook", nbs[0].Name);
+    }
+}
+
+public class NotebookTests
+{
+    [Fact]
+    public void Notes_and_folders_are_scoped_to_their_notebook()
+    {
+        using var fx = new NotebookFixture();
+        var chem = fx.Notes.CreateNotebook("Chemistry");
+        var phys = fx.Notes.CreateNotebook("Physics");
+
+        var acids = fx.Notes.CreateFolder("Acids", notebookId: chem.Id);
+        fx.Notes.CreateNote("Titration", NoteType.Note, acids.Id, chem.Id);
+        fx.Notes.CreateNote("Loose chem note", NoteType.Note, null, chem.Id);
+        fx.Notes.CreateNote("Kinematics", NoteType.Note, null, phys.Id);
+
+        Assert.Single(fx.Notes.ListFolders(chem.Id));
+        Assert.Empty(fx.Notes.ListFolders(phys.Id));
+        Assert.Equal(2, fx.Notes.ListNotes(notebookId: chem.Id).Count);
+        Assert.Single(fx.Notes.ListNotes(notebookId: phys.Id));
+
+        // A note created in a folder inherits that folder's notebook.
+        var inFolder = fx.Notes.ListNotes(acids.Id).Single();
+        Assert.Equal(chem.Id, inFolder.NotebookId);
+    }
+
+    [Fact]
+    public void Deleting_a_notebook_trashes_its_notes_and_folders()
+    {
+        using var fx = new NotebookFixture();
+        var chem = fx.Notes.CreateNotebook("Chemistry");
+        var f = fx.Notes.CreateFolder("Section", notebookId: chem.Id);
+        fx.Notes.CreateNote("Note A", NoteType.Note, f.Id, chem.Id);
+
+        Assert.Equal(1, fx.Notes.NotebookNoteCount(chem.Id));
+        fx.Notes.DeleteNotebook(chem.Id);
+
+        Assert.DoesNotContain(fx.Notes.ListNotebooks(), n => n.Id == chem.Id);
+        Assert.Empty(fx.Notes.ListFolders(chem.Id));
+        Assert.Equal(0, fx.Notes.NotebookNoteCount(chem.Id));
+        Assert.Contains(fx.Notes.ListTrash(), n => n.Title == "Note A");
+    }
+
+    [Fact]
+    public void Moving_a_note_into_a_folder_rehomes_it_to_that_notebook()
+    {
+        using var fx = new NotebookFixture();
+        var chem = fx.Notes.CreateNotebook("Chemistry");
+        var phys = fx.Notes.CreateNotebook("Physics");
+        var physFolder = fx.Notes.CreateFolder("Mechanics", notebookId: phys.Id);
+        var note = fx.Notes.CreateNote("Wandering note", NoteType.Note, null, chem.Id);
+
+        fx.Notes.MoveNoteToFolder(note.Id, physFolder.Id);
+
+        var moved = fx.Notes.GetNote(note.Id)!;
+        Assert.Equal(physFolder.Id, moved.FolderId);
+        Assert.Equal(phys.Id, moved.NotebookId);
     }
 }
 

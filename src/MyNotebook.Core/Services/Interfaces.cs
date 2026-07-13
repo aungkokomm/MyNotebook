@@ -69,23 +69,38 @@ public interface IStorageService
 /// <summary>Notes, folders, images, tags, and search. The app's main data API.</summary>
 public interface INoteService
 {
+    // Notebooks (top-level containers; OneNote Notebook > Section(folder) > Page(note))
+    Notebook CreateNotebook(string name, string color = "");
+    IReadOnlyList<Notebook> ListNotebooks();
+    void RenameNotebook(long id, string name);
+    /// <summary>Set a notebook's accent color (#RRGGBB), or "" to clear.</summary>
+    void SetNotebookColor(long id, string color);
+    /// <summary>Soft-delete a notebook and all folders + notes inside it.</summary>
+    void DeleteNotebook(long id);
+    /// <summary>Count of live (non-deleted) notes in a notebook — for the delete confirmation.</summary>
+    int NotebookNoteCount(long notebookId);
+
     // Folders
-    Folder CreateFolder(string name, long? parentId = null);
-    IReadOnlyList<Folder> ListFolders();
+    Folder CreateFolder(string name, long? parentId = null, long? notebookId = null);
+    /// <summary>Folders, optionally scoped to one notebook (null = every notebook).</summary>
+    IReadOnlyList<Folder> ListFolders(long? notebookId = null);
     void RenameFolder(long id, string name);
+    /// <summary>Set a folder's accent color (#RRGGBB), or "" to clear.</summary>
+    void SetFolderColor(long id, string color);
     /// <summary>Soft-delete a folder, its subfolders, and all their notes.</summary>
     void DeleteFolder(long id);
 
-    // Move a note into a folder (null = Unfiled).
-    void MoveNoteToFolder(long noteId, long? folderId);
+    // Move a note into a folder (null = Unfiled). Pass notebookId to also re-home the note.
+    void MoveNoteToFolder(long noteId, long? folderId, long? notebookId = null);
 
     // Notes
-    Note CreateNote(string title, NoteType type = NoteType.Note, long? folderId = null);
+    Note CreateNote(string title, NoteType type = NoteType.Note, long? folderId = null, long? notebookId = null);
     Note? GetNote(long id);
     void UpdateNote(Note note);
     void SetPinned(long noteId, bool pinned);
     void SoftDeleteNote(long noteId);
-    IReadOnlyList<Note> ListNotes(long? folderId = null, bool includeDeleted = false);
+    /// <summary>Notes in a folder (folderId set) or all notes; optionally scoped to one notebook.</summary>
+    IReadOnlyList<Note> ListNotes(long? folderId = null, bool includeDeleted = false, long? notebookId = null);
 
     /// <summary>All non-deleted notes ordered for the Timeline by the given axis, newest first.</summary>
     IReadOnlyList<Note> ListTimeline(TimelineAxis axis = TimelineAxis.Modified);

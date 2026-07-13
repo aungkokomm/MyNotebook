@@ -82,10 +82,22 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <Border Grid.Row="0" Padding="12,0,6,0" BorderThickness="0,0,0,1"
+                <Border Grid.Row="0" Padding="6,0,6,0" BorderThickness="0,0,0,1"
                         BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
                     <Grid VerticalAlignment="Center">
-                        <TextBlock Text="My Notebook" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <Button x:Name="NotebookSwitcher" Click="NotebookSwitcher_Click"
+                                HorizontalAlignment="Left" Background="Transparent" BorderThickness="0"
+                                Padding="6,4" CornerRadius="6" MaxWidth="150"
+                                ToolTipService.ToolTip="Switch notebook">
+                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                <FontIcon x:Name="NotebookIcon" Glyph="&#xE82D;" FontSize="14"
+                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <TextBlock x:Name="NotebookName" Text="My Notebook" FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                <FontIcon Glyph="&#xE70D;" FontSize="10" VerticalAlignment="Center"
+                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
+                        </Button>
                         <Button x:Name="NewFolderButton" Click="NewFolder_Click" HorizontalAlignment="Right"
                                 Background="Transparent" BorderThickness="0" Width="32" Height="32"
                                 Padding="0" CornerRadius="6" ToolTipService.ToolTip="New folder">
@@ -115,7 +127,7 @@
                             <StackPanel Orientation="Horizontal" Spacing="10">
                                 <FontIcon Glyph="{Binding Content.IconGlyph}" FontSize="15"
                                           VerticalAlignment="Center"
-                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                          Foreground="{Binding Content.IconBrush}" />
                                 <TextBlock Text="{Binding Content.DisplayTitle}"
                                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                             </StackPanel>
@@ -471,8 +483,39 @@
                                     </MenuFlyout>
                                 </Button.Flyout>
                             </Button>
-                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Highlight" Click="Highlight_Click">
+                            <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Highlight">
                                 <FontIcon Glyph="&#xE891;" FontSize="15" />
+                                <Button.Flyout>
+                                    <Flyout x:Name="HighlightFlyout">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <Button Width="28" Height="28" CornerRadius="6" Padding="0" BorderThickness="1"
+                                                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                                    Background="#FFF2A8" Tag="#fff2a8" Click="Highlight_Click" ToolTipService.ToolTip="Yellow" />
+                                            <Button Width="28" Height="28" CornerRadius="6" Padding="0" BorderThickness="1"
+                                                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                                    Background="#D6F84A" Tag="#d6f84a" Click="Highlight_Click" ToolTipService.ToolTip="Lime" />
+                                            <Button Width="28" Height="28" CornerRadius="6" Padding="0" BorderThickness="1"
+                                                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                                    Background="#B6F0BD" Tag="#b6f0bd" Click="Highlight_Click" ToolTipService.ToolTip="Green" />
+                                            <Button Width="28" Height="28" CornerRadius="6" Padding="0" BorderThickness="1"
+                                                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                                    Background="#FFC7DD" Tag="#ffc7dd" Click="Highlight_Click" ToolTipService.ToolTip="Pink" />
+                                            <Button Width="28" Height="28" CornerRadius="6" Padding="0" BorderThickness="1"
+                                                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                                    Background="#BFE0FF" Tag="#bfe0ff" Click="Highlight_Click" ToolTipService.ToolTip="Blue" />
+                                            <Button Width="28" Height="28" CornerRadius="6" Padding="0" BorderThickness="1"
+                                                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                                    Background="#FFD8A8" Tag="#ffd8a8" Click="Highlight_Click" ToolTipService.ToolTip="Orange" />
+                                            <Button Width="28" Height="28" CornerRadius="6" Padding="0" BorderThickness="1"
+                                                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                                    Background="#E3CCFF" Tag="#e3ccff" Click="Highlight_Click" ToolTipService.ToolTip="Purple" />
+                                            <Button Width="28" Height="28" CornerRadius="6" Padding="0" Tag="transparent"
+                                                    Click="Highlight_Click" ToolTipService.ToolTip="No highlight">
+                                                <FontIcon Glyph="&#xE894;" FontSize="12" />
+                                            </Button>
+                                        </StackPanel>
+                                    </Flyout>
+                                </Button.Flyout>
                             </Button>
                             <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Clear formatting" Click="ClearFormat_Click">
                                 <TextBlock Text="T&#x2715;" FontSize="13" VerticalAlignment="Center" HorizontalAlignment="Center" />
@@ -600,7 +643,11 @@
                                          FontSize="30" FontWeight="Light" FontFamily="Calibri Light"
                                          Padding="0" Margin="0"
                                          TextChanged="TitleBox_TextChanged" />
-                                <TextBlock x:Name="DateLine" FontSize="12" Opacity="0.55" Margin="1,8,0,0" />
+                                <Grid Margin="1,8,0,0">
+                                    <TextBlock x:Name="DateLine" FontSize="12" Opacity="0.55" />
+                                    <TextBlock x:Name="SaveStatus" FontSize="12" Opacity="0" HorizontalAlignment="Right"
+                                               VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Text="" />
+                                </Grid>
                                 <TextBlock x:Name="EditedLine" FontSize="12" Opacity="0.55" Margin="1,1,0,0" />
                                 <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,8,0,0">
                                     <ItemsControl x:Name="NoteTagsList">

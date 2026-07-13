@@ -75,6 +75,9 @@ public sealed partial class MainWindow : Window
     private TreeViewNode? _unfiledNode;
     private TreeViewNode? _allNotesNode;
 
+    // Notebooks (top-level containers). _currentNotebookId scopes the rail + note list.
+    private long _currentNotebookId;
+
     // Note-list pane state
     private readonly System.Collections.ObjectModel.ObservableCollection<NoteListRow> _noteRows = new();
     private enum ListFilter { AllNotes, Folder, Unfiled, SmartFolder, Trash, Tag }
@@ -115,6 +118,7 @@ public sealed partial class MainWindow : Window
         ApplyBackdrop();
         ApplyThemeSurfaces();       // tint chrome to match the saved theme
         RegisterAccelerators();
+        EnsureCurrentNotebook();
         BuildTree();
 
         InstallSubclass();
@@ -168,6 +172,155 @@ public sealed partial class MainWindow : Window
             (int)Math.Round(el.ActualWidth * scale), (int)Math.Round(el.ActualHeight * scale));
     }
 
+    // =============================================================== Notebooks
+    // Pick the notebook to show on launch: the remembered one if it still exists,
+    // else the first. Guarantees at least one notebook exists.
+    private void EnsureCurrentNotebook()
+    {
+        var nbs = _notes.ListNotebooks();
+        if (nbs.Count == 0)
+        {
+            _currentNotebookId = _notes.CreateNotebook("My Notebook").Id;
+        }
+        else
+        {
+            var saved = _settings.Current.CurrentNotebookId;
+            _currentNotebookId = nbs.Any(n => n.Id == saved) ? saved : nbs[0].Id;
+        }
+        UpdateNotebookSwitcher();
+    }
+
+    private void UpdateNotebookSwitcher()
+    {
+        var nb = _notes.ListNotebooks().FirstOrDefault(n => n.Id == _currentNotebookId);
+        NotebookName.Text = nb?.Name ?? "My Notebook";
+        NotebookIcon.Foreground = BrushForLabel(nb?.Color);
+    }
+
+    // OneNote-style accent palette, reused for notebooks and folders.
+    private static readonly (string Name, string Hex)[] LabelColors =
+    {
+        ("Blue", "#2F6FED"), ("Teal", "#0F9B8E"), ("Green", "#3AA655"),
+        ("Lime", "#7CB342"), ("Yellow", "#E6B800"), ("Orange", "#E8730C"),
+        ("Red", "#E03E3E"), ("Pink", "#E0518A"), ("Purple", "#8A4FD0"),
+        ("Gray", "#6B7280"),
+    };
+
+    private Microsoft.UI.Xaml.Media.Brush BrushForLabel(string? hex)
+    {
+        if (!string.IsNullOrWhiteSpace(hex))
+            try { return new SolidColorBrush(ParseHex(hex)); } catch { }
+        return (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+    }
+
+    // A "Color" submenu of swatches (+ a Default/clear item). `apply` receives the chosen hex ("" = clear).
+    private MenuFlyoutSubItem BuildColorSubmenu(string label, string currentHex, Action<string> apply)
+    {
+        var sub = new MenuFlyoutSubItem { Text = label };
+        var none = new MenuFlyoutItem { Text = "Default", Icon = new FontIcon { Glyph = "" } };
+        none.Click += (_, _) => apply("");
+        sub.Items.Add(none);
+        sub.Items.Add(new MenuFlyoutSeparator());
+        foreach (var (name, hex) in LabelColors)
+        {
+            var dot = new FontIcon { Glyph = "", Foreground = new SolidColorBrush(ParseHex(hex)) };
+            var mi = new MenuFlyoutItem
+            {
+                Text = string.Equals(hex, currentHex, StringComparison.OrdinalIgnoreCase) ? name + "  ✓" : name,
+                Icon = dot,
+            };
+            var h = hex;
+            mi.Click += (_, _) => apply(h);
+            sub.Items.Add(mi);
+        }
+        return sub;
+    }
+
+    private void SwitchNotebook(long id)
+    {
+        if (id == _currentNotebookId) { UpdateNotebookSwitcher(); BuildTree(); return; }
+        _currentNotebookId = id;
+        _settings.Current.CurrentNotebookId = id;
+        _settings.Save();
+        _filter = ListFilter.AllNotes; _filterId = 0; _filterTitle = Loc.T("rail.allnotes"); _filterQuery = "";
+        UpdateNotebookSwitcher();
+        BuildTree();
+    }
+
+    private void NotebookSwitcher_Click(object sender, RoutedEventArgs e)
+    {
+        var flyout = new MenuFlyout { Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.BottomEdgeAlignedLeft };
+        var nbs = _notes.ListNotebooks();
+        foreach (var nb in nbs)
+        {
+            var item = new RadioMenuFlyoutItem { Text = nb.Name, GroupName = "notebooks", IsChecked = nb.Id == _currentNotebookId };
+            var id = nb.Id;
+            item.Click += (_, _) => SwitchNotebook(id);
+            flyout.Items.Add(item);
+        }
+        flyout.Items.Add(new MenuFlyoutSeparator());
+        var add = new MenuFlyoutItem { Text = "New notebook…", Icon = new FontIcon { Glyph = "" } };
+        add.Click += (_, _) => _ = NewNotebookPrompt();
+        flyout.Items.Add(add);
+        var ren = new MenuFlyoutItem { Text = "Rename notebook…", Icon = new FontIcon { Glyph = "" } };
+        ren.Click += (_, _) => _ = RenameCurrentNotebookPrompt();
+        flyout.Items.Add(ren);
+        var curColor = nbs.FirstOrDefault(n => n.Id == _currentNotebookId)?.Color ?? "";
+        flyout.Items.Add(BuildColorSubmenu("Notebook color", curColor,
+            hex => { _notes.SetNotebookColor(_currentNotebookId, hex); UpdateNotebookSwitcher(); }));
+        var del = new MenuFlyoutItem { Text = "Delete notebook…", Icon = new FontIcon { Glyph = "" }, IsEnabled = nbs.Count > 1 };
+        del.Click += (_, _) => _ = DeleteCurrentNotebookPrompt();
+        flyout.Items.Add(del);
+        flyout.ShowAt(NotebookSwitcher);
+    }
+
+    private async Task NewNotebookPrompt()
+    {
+        var name = await PromptTextAsync("New notebook", "My Notebook");
+        if (string.IsNullOrWhiteSpace(name)) return;
+        var nb = _notes.CreateNotebook(name.Trim());
+        SwitchNotebook(nb.Id);   // jump into the fresh (empty) notebook
+    }
+
+    private async Task RenameCurrentNotebookPrompt()
+    {
+        var nb = _notes.ListNotebooks().FirstOrDefault(n => n.Id == _currentNotebookId);
+        if (nb is null) return;
+        var name = await PromptTextAsync("Rename notebook", nb.Name);
+        if (string.IsNullOrWhiteSpace(name)) return;
+        _notes.RenameNotebook(nb.Id, name.Trim());
+        UpdateNotebookSwitcher();
+    }
+
+    private async Task DeleteCurrentNotebookPrompt()
+    {
+        var nbs = _notes.ListNotebooks();
+        if (nbs.Count <= 1) return;   // never delete the last notebook
+        var nb = nbs.FirstOrDefault(n => n.Id == _currentNotebookId);
+        if (nb is null) return;
+        int count = _notes.NotebookNoteCount(nb.Id);
+        var dlg = new ContentDialog
+        {
+            Title = $"Delete “{nb.Name}”?",
+            Content = count == 0
+                ? "This notebook is empty. Delete it?"
+                : $"This moves the notebook and its {count} note{(count == 1 ? "" : "s")} to the Trash.",
+            PrimaryButtonText = "Delete",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot,
+        };
+        if (await dlg.ShowAsync() != ContentDialogResult.Primary) return;
+        _notes.DeleteNotebook(nb.Id);
+        var next = _notes.ListNotebooks().FirstOrDefault();
+        _currentNotebookId = next?.Id ?? 0;
+        _settings.Current.CurrentNotebookId = _currentNotebookId;
+        _settings.Save();
+        _filter = ListFilter.AllNotes; _filterId = 0; _filterTitle = Loc.T("rail.allnotes"); _filterQuery = "";
+        UpdateNotebookSwitcher();
+        BuildTree();
+    }
+
     // ================================================================ Sidebar
     private void BuildTree()
     {
@@ -178,7 +331,7 @@ public sealed partial class MainWindow : Window
         _allNotesNode = MakeNode(new NodeItem { Kind = NodeKind.AllNotes, Title = Loc.T("rail.allnotes"), Glyph = "🗂" });
         SidebarTree.RootNodes.Add(_allNotesNode);
 
-        var folders = _notes.ListFolders();
+        var folders = _notes.ListFolders(_currentNotebookId);
         foreach (var f in folders.Where(f => f.ParentId is null))
             SidebarTree.RootNodes.Add(BuildFolderNode(f, folders));
 
@@ -200,7 +353,7 @@ public sealed partial class MainWindow : Window
 
     private TreeViewNode BuildFolderNode(Folder f, IReadOnlyList<Folder> all)
     {
-        var node = MakeNode(new NodeItem { Kind = NodeKind.Folder, Id = f.Id, Title = f.Name, Glyph = "📁" });
+        var node = MakeNode(new NodeItem { Kind = NodeKind.Folder, Id = f.Id, Title = f.Name, Glyph = "📁", Color = f.Color });
         node.IsExpanded = true;
         foreach (var sub in all.Where(x => x.ParentId == f.Id))
             node.Children.Add(BuildFolderNode(sub, all));
@@ -228,12 +381,12 @@ public sealed partial class MainWindow : Window
         IEnumerable<Note> notes = _filter switch
         {
             ListFilter.Folder => _notes.ListNotes(_filterId),
-            ListFilter.Unfiled => _notes.ListNotes().Where(n => n.FolderId is null),
+            ListFilter.Unfiled => _notes.ListNotes(notebookId: _currentNotebookId).Where(n => n.FolderId is null),
             ListFilter.SmartFolder => _notes.Search(_filterQuery, 300)
                                             .Select(h => _notes.GetNote(h.NoteId)).Where(n => n is not null).Select(n => n!),
             ListFilter.Trash => _notes.ListTrash(),
             ListFilter.Tag => _notes.ListNotesWithTag(_filterId),
-            _ => _notes.ListNotes(),
+            _ => _notes.ListNotes(notebookId: _currentNotebookId),   // All Notes (this notebook)
         };
 
         // Pinned float to the top (except in Trash), then by the chosen sort key.
@@ -559,7 +712,7 @@ public sealed partial class MainWindow : Window
         var unfiled = new MenuFlyoutItem { Text = "Unfiled" };
         unfiled.Click += (_, _) => MoveNote(id, null);
         moveTo.Items.Add(unfiled);
-        foreach (var f in _notes.ListFolders())
+        foreach (var f in _notes.ListFolders(_currentNotebookId))
         {
             var fid = f.Id;
             var mi = new MenuFlyoutItem { Text = f.Name };
@@ -704,6 +857,8 @@ public sealed partial class MainWindow : Window
                 AddItem(menu, "New note here", () => CreateNoteInFolder(item.Id));
                 AddItem(menu, "New subfolder", () => _ = NewFolderPrompt(item.Id));
                 AddItem(menu, "Rename", () => _ = RenameFolderPrompt(item.Id, item.Title));
+                menu.Items.Add(BuildColorSubmenu("Folder color", item.Color,
+                    hex => { _notes.SetFolderColor(item.Id, hex); BuildTree(); }));
                 AddItem(menu, "Export folder to PDF…", () => _ = ExportFolderPdf(item.Id, item.Title));
                 menu.Items.Add(new MenuFlyoutSeparator());
                 AddItem(menu, "Delete folder", () => _ = DeleteFolderPrompt(item.Id, item.Title));
@@ -761,14 +916,14 @@ public sealed partial class MainWindow : Window
     {
         var name = await PromptTextAsync(parentId is null ? "New folder" : "New subfolder", "New folder");
         if (string.IsNullOrWhiteSpace(name)) return;
-        _notes.CreateFolder(name.Trim(), parentId);
+        _notes.CreateFolder(name.Trim(), parentId, _currentNotebookId);
         BuildTree();
     }
 
     private void CreateNoteInFolder(long folderId)
     {
-        var note = _notes.CreateNote("New note", NoteType.Note, folderId);
-        var name = _notes.ListFolders().FirstOrDefault(f => f.Id == folderId)?.Name ?? "Folder";
+        var note = _notes.CreateNote("New note", NoteType.Note, folderId, _currentNotebookId);
+        var name = _notes.ListFolders(_currentNotebookId).FirstOrDefault(f => f.Id == folderId)?.Name ?? "Folder";
         ApplyFilter(ListFilter.Folder, folderId, name, "");
         ShowNote(note.Id);
     }
@@ -1394,6 +1549,12 @@ public sealed partial class MainWindow : Window
             case "focussearch":
                 FocusSearch();
                 break;
+            case "quickopen":
+                _ = ShowQuickOpen();
+                break;
+            case "shortcuts":
+                _ = ShowShortcuts();
+                break;
             case "togglefocus":
                 SetFocusMode(!_focusMode);
                 break;
@@ -1522,6 +1683,33 @@ public sealed partial class MainWindow : Window
         _current.BodyPlain = text;   // plain text for FTS
         _notes.UpdateNote(_current);
         UpdateNodeTitle(_current);
+        FlashSaved();
+    }
+
+    // A subtle "Saved" note near the title, fading out shortly after each autosave.
+    private Microsoft.UI.Xaml.Media.Animation.Storyboard? _savedFade;
+    private void FlashSaved()
+    {
+        try
+        {
+            SaveStatus.Text = "✓ Saved";
+            SaveStatus.Opacity = 1;
+            if (_savedFade is null)
+            {
+                var anim = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimation
+                {
+                    From = 1, To = 0, BeginTime = TimeSpan.FromSeconds(1.2),
+                    Duration = TimeSpan.FromSeconds(0.8),
+                };
+                Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(anim, SaveStatus);
+                Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(anim, "Opacity");
+                _savedFade = new Microsoft.UI.Xaml.Media.Animation.Storyboard();
+                _savedFade.Children.Add(anim);
+            }
+            _savedFade.Stop();
+            _savedFade.Begin();
+        }
+        catch { }
     }
 
     /// <summary>Decode a pasted data-URL, save it (de-duped/downscaled/OCR'd), and insert it at the caret.</summary>
@@ -1705,9 +1893,12 @@ public sealed partial class MainWindow : Window
         try
         {
             var items = e.MenuItems;
-            var keep = new HashSet<string> { "undo", "redo", "cut", "copy", "paste", "selectAll" };
+            // Keep everything native (spell-check suggestions, cut/copy/paste, emoji, …); only drop the
+            // page-level web actions that don't belong in a note editor.
+            var drop = new HashSet<string> { "saveAs", "print", "share", "webSelect", "viewSource",
+                "inspectElement", "reload", "back", "forward", "createQrCode", "webCapture", "saveFrameAs" };
             for (int i = items.Count - 1; i >= 0; i--)
-                if (!keep.Contains(items[i].Name)) items.RemoveAt(i);
+                if (drop.Contains(items[i].Name)) items.RemoveAt(i);
 
             var plain = sender.Environment.CreateContextMenuItem(
                 "Paste as plain text", null, CoreWebView2ContextMenuItemKind.Command);
@@ -1716,9 +1907,21 @@ public sealed partial class MainWindow : Window
             int idx = -1;
             for (int i = 0; i < items.Count; i++) if (items[i].Name == "paste") { idx = i + 1; break; }
             if (idx >= 0) items.Insert(idx, plain); else items.Add(plain);
+
+            // Insert date / time.
+            items.Add(sender.Environment.CreateContextMenuItem("", null, CoreWebView2ContextMenuItemKind.Separator));
+            var date = sender.Environment.CreateContextMenuItem("Insert date", null, CoreWebView2ContextMenuItemKind.Command);
+            date.CustomItemSelected += (_, _) => EditorInsert(DateTime.Now.ToString("D"));
+            var time = sender.Environment.CreateContextMenuItem("Insert time", null, CoreWebView2ContextMenuItemKind.Command);
+            time.CustomItemSelected += (_, _) => EditorInsert(DateTime.Now.ToString("t"));
+            items.Add(date);
+            items.Add(time);
         }
         catch { /* fall back to the default menu */ }
     }
+
+    private void EditorInsert(string text)
+        => _ = NoteWeb.CoreWebView2?.ExecuteScriptAsync($"insertPlainText({JsonSerializer.Serialize(text)})");
 
     private async Task PastePlainAsync()
     {
@@ -1798,6 +2001,10 @@ public sealed partial class MainWindow : Window
  #ed td,#ed th{border:1px solid rgba(128,128,128,.5);padding:6px 10px;min-width:44px;vertical-align:top;}
  #ed th{background:rgba(128,128,128,.14);font-weight:600;text-align:left;}
  #ed td.tsel,#ed th.tsel{outline:2px solid #2f6fed;outline-offset:-2px;}
+ #colGrips{position:fixed;left:0;top:0;pointer-events:none;z-index:10000;}
+ #colGrips .colGrip{position:fixed;width:9px;margin-left:-4px;cursor:col-resize;pointer-events:auto;}
+ #colGrips .colGrip::after{content:'';position:absolute;left:4px;top:0;width:1px;height:100%;background:transparent;}
+ #colGrips .colGrip:hover::after,#colGrips .colGrip.drag::after{background:#2f6fed;left:3px;width:3px;border-radius:2px;}
  #tblBar{position:fixed;z-index:10001;display:none;align-items:center;gap:1px;background:Canvas;color:CanvasText;
    border:1px solid rgba(128,128,128,.32);border-radius:11px;box-shadow:0 8px 28px rgba(0,0,0,.24);padding:4px;}
  #tblBar button{border:0;background:transparent;color:inherit;height:30px;min-width:32px;padding:0 7px;cursor:pointer;
@@ -1860,6 +2067,7 @@ public sealed partial class MainWindow : Window
   <div class="mrow">
     <label class="mhint"><input type="checkbox" id="mathDisp"> Display (own line)</label>
     <span style="flex:1"></span>
+    <button id="mathCopy">Copy LaTeX</button>
     <button id="mathDel" class="danger" style="display:none">Delete</button>
     <button id="mathCancel">Cancel</button>
     <button id="mathOk" class="pri">Insert</button>
@@ -1887,6 +2095,10 @@ public sealed partial class MainWindow : Window
   <span class="sep"></span>
   <button id="tColAdd" title="Add column right">+ Col</button>
   <button id="tColDel" class="danger" title="Delete column">&#8722; Col</button>
+  <span class="sep"></span>
+  <button id="tAL" title="Align column left">L</button>
+  <button id="tAC" title="Align column center">C</button>
+  <button id="tAR" title="Align column right">R</button>
   <span class="sep"></span>
   <button id="tHead" title="Toggle header row">Header</button>
   <button id="tDel" class="danger" title="Delete table">&#128465;</button>
@@ -1976,6 +2188,12 @@ public sealed partial class MainWindow : Window
    // Ctrl+Shift+V: force plain text, ignoring formatting and images.
    if(plainNext){plainNext=false;e.preventDefault();
      document.execCommand('insertText',false,cd?cd.getData('text'):'');post({type:'pasted',text:autoTitle()});return;}
+   // Paste a URL while text is selected -> turn the selection into a link.
+   var _pt=cd?cd.getData('text'):'',_ps=getSelection();
+   if(/^\s*https?:\/\/\S+\s*$/i.test(_pt)&&_ps.rangeCount&&!_ps.isCollapsed){
+     e.preventDefault();document.execCommand('createLink',false,_pt.trim());
+     var la=_ps.anchorNode&&_ps.anchorNode.parentElement&&_ps.anchorNode.parentElement.closest('a');if(la)la.setAttribute('target','_blank');
+     post({type:'pasted',text:autoTitle()});save();return;}
    var types=(cd&&cd.types)||[];
    var hasHtml=Array.prototype.indexOf.call(types,'text/html')>=0;
    var items=(cd&&cd.items)||[];
@@ -2177,6 +2395,42 @@ public sealed partial class MainWindow : Window
    if(selImg&&(e.key==='Escape')){deselectImg();return;}
    if(selImg&&(e.key==='Delete'||e.key==='Backspace')&&document.activeElement!==ed){e.preventDefault();var g=selImg;deselectImg();g.parentNode&&g.parentNode.removeChild(g);save();}
  });
+ // ---- Quality-of-life helpers: table Tab nav, checklist auto-continue, URL auto-link ----
+ function currentBlock(){var s=getSelection();if(!s.rangeCount)return null;var n=s.anchorNode;n=(n&&n.nodeType===3)?n.parentNode:n;
+   while(n&&n!==ed){var tg=n.tagName;if(tg&&/^(P|DIV|LI|H[1-6]|BLOCKQUOTE|PRE|TD|TH)$/.test(tg))return n;n=n.parentNode;}return null;}
+ function lineText(){var b=currentBlock();if(b)return b.textContent||'';var s=getSelection();var n=s.anchorNode;return (n&&n.nodeType===3)?n.nodeValue:((n&&n.textContent)||'');}
+ function placeCaretIn(el){var r=document.createRange();r.selectNodeContents(el);r.collapse(true);var s=getSelection();s.removeAllRanges();s.addRange(r);snap();}
+ function tableTab(cell,back){
+   var tbl=cell.closest('table');if(!tbl)return;
+   var cells=Array.prototype.slice.call(tbl.querySelectorAll('td,th'));
+   var i=cells.indexOf(cell),j=back?i-1:i+1;
+   if(j<0){placeCaretIn(cells[0]);return;}
+   if(j>=cells.length){if(back)return;tblRowAdd();cells=Array.prototype.slice.call(tbl.querySelectorAll('td,th'));}
+   if(cells[j])placeCaretIn(cells[j]);
+ }
+ function linkifyAtCaret(){
+   var s=getSelection();if(!s.rangeCount||!s.isCollapsed)return;
+   var r=s.getRangeAt(0),n=r.startContainer;if(n.nodeType!==3)return;
+   var p=n.parentNode;while(p&&p!==ed){if(p.tagName==='A')return;p=p.parentNode;}
+   var m=n.nodeValue.slice(0,r.startOffset).match(/(https?:\/\/[^\s]+[^\s.,;:!?)])$/);if(!m)return;
+   var url=m[1],start=r.startOffset-url.length;
+   try{var rg=document.createRange();rg.setStart(n,start);rg.setEnd(n,r.startOffset);
+     var a=document.createElement('a');a.setAttribute('href',url);a.setAttribute('target','_blank');rg.surroundContents(a);
+     var rr=document.createRange();rr.setStartAfter(a);rr.collapse(true);s.removeAllRanges();s.addRange(rr);snap();save();}catch(e){}
+ }
+ var _clPend=false;
+ ed.addEventListener('keyup',function(e){if(e.key==='Enter'&&_clPend){_clPend=false;document.execCommand('insertText',false,'☐ ');save();}});
+ function moveLine(dir){var b=currentBlock();if(!b||b===ed)return;var sib=dir<0?b.previousElementSibling:b.nextElementSibling;if(!sib)return;
+   if(dir<0)b.parentNode.insertBefore(b,sib);else b.parentNode.insertBefore(sib,b);placeCaretIn(b);save();}
+ function duplicateLine(){var b=currentBlock();if(!b||b===ed)return;var c=b.cloneNode(true);b.parentNode.insertBefore(c,b.nextSibling);placeCaretIn(c);save();}
+ var PAIRS={'(':')','[':']','{':'}','"':'"',"'":"'","`":"`"};
+ function autoPair(ch){var s=getSelection();if(!s.rangeCount||s.isCollapsed)return false;
+   document.execCommand('insertText',false,ch+s.getRangeAt(0).toString()+PAIRS[ch]);save();return true;}
+ ed.addEventListener('mousedown',function(e){                               // click the empty area below -> caret to end
+   if(e.target!==ed)return;var last=ed.lastElementChild;
+   var bottom=last&&last.getBoundingClientRect?last.getBoundingClientRect().bottom:0;
+   if(e.clientY>bottom-2){var r=document.createRange();r.selectNodeContents(ed);r.collapse(false);var s=getSelection();s.removeAllRanges();s.addRange(r);}
+ });
  document.addEventListener('keydown',function(e){
    if(wlPop){
      if(e.key==='ArrowDown'){e.preventDefault();wlSel=Math.min(wlSel+1,wlItems.length-1);paintWl();return;}
@@ -2184,6 +2438,30 @@ public sealed partial class MainWindow : Window
      if(e.key==='Enter'||e.key==='Tab'){e.preventDefault();chooseWl(wlSel);return;}
      if(e.key==='Escape'){e.preventDefault();closeWl();return;}
    }
+   if(slPop){
+     if(e.key==='ArrowDown'){e.preventDefault();slSel=Math.min(slSel+1,slItems.length-1);paintSl();return;}
+     if(e.key==='ArrowUp'){e.preventDefault();slSel=Math.max(slSel-1,0);paintSl();return;}
+     if(e.key==='Enter'||e.key==='Tab'){e.preventDefault();chooseSl(slSel);return;}
+     if(e.key==='Escape'){e.preventDefault();closeSl();return;}
+   }
+   if(e.key==='Tab'){var tc=curCell();
+     if(tc){e.preventDefault();tableTab(tc,e.shiftKey);return;}
+     e.preventDefault();exec(e.shiftKey?'outdent':'indent');return;}
+   if(e.key==='Enter'&&!e.shiftKey&&!e.ctrlKey&&!e.altKey){var lt=lineText();
+     if(/^\s*[☐☑]\s/.test(lt)){
+       if(/^\s*[☐☑]\s*$/.test(lt)){e.preventDefault();var cb=currentBlock();
+         if(cb){cb.textContent='';placeCaretIn(cb);}else{var s2=getSelection();var n2=s2.anchorNode;if(n2&&n2.nodeType===3)n2.nodeValue='';}
+         save();return;}
+       _clPend=true;
+     }
+   }
+   if(e.altKey&&e.shiftKey&&(e.key||'').toLowerCase()==='d'){e.preventDefault();ed.focus();restore();
+     document.execCommand('insertText',false,new Date().toLocaleDateString());snap();save();return;}
+   if((e.key===' '||e.key==='Enter')&&!e.ctrlKey&&!e.altKey){linkifyAtCaret();}
+   if(e.altKey&&!e.ctrlKey&&(e.key==='ArrowUp'||e.key==='ArrowDown')){e.preventDefault();moveLine(e.key==='ArrowUp'?-1:1);return;}
+   if((e.ctrlKey||e.metaKey)&&e.shiftKey&&(e.key==='d'||e.key==='D')){e.preventDefault();duplicateLine();return;}
+   if(!e.ctrlKey&&!e.metaKey&&!e.altKey&&e.key&&e.key.length===1&&PAIRS[e.key]){
+     var _ps2=getSelection();if(_ps2.rangeCount&&!_ps2.isCollapsed&&autoPair(e.key)){e.preventDefault();return;}}
    if((e.ctrlKey||e.metaKey)&&e.shiftKey&&(e.key==='v'||e.key==='V')){plainNext=true;setTimeout(function(){plainNext=false;},500);return;}
    if((e.ctrlKey||e.metaKey)&&e.altKey){var ak=(e.key||'').toLowerCase();   // headings, Word-style
      if(ak==='1'){e.preventDefault();exec('formatBlock','H1');return;}
@@ -2195,8 +2473,8 @@ public sealed partial class MainWindow : Window
        if(kk==='b'){e.preventDefault();exec('bold');return;}
        if(kk==='i'){e.preventDefault();exec('italic');return;}
        if(kk==='u'){e.preventDefault();exec('underline');return;}
-       if(kk==='z'){e.preventDefault();exec('undo');return;}
-       if(kk==='y'){e.preventDefault();exec('redo');return;}
+       if(kk==='z'){e.preventDefault();doUndo();return;}
+       if(kk==='y'){e.preventDefault();doRedo();return;}
        if(kk==='l'){e.preventDefault();exec('justifyLeft');return;}
        if(kk==='e'){e.preventDefault();exec('justifyCenter');return;}
        if(kk==='r'){e.preventDefault();exec('justifyRight');return;}
@@ -2205,7 +2483,7 @@ public sealed partial class MainWindow : Window
        if(kk==='='){e.preventDefault();exec('subscript');return;}
        if(kk==='\\'){e.preventDefault();exec('removeFormat');return;}
      }else{
-       if(kk==='z'){e.preventDefault();exec('redo');return;}
+       if(kk==='z'){e.preventDefault();doRedo();return;}
        if(kk==='x'){e.preventDefault();exec('strikeThrough');return;}
        if(kk==='m'){e.preventDefault();exec('outdent');return;}
        if(kk==='='||kk==='+'){e.preventDefault();exec('superscript');return;}
@@ -2214,6 +2492,8 @@ public sealed partial class MainWindow : Window
        if(kk==='9'){e.preventDefault();ed.focus();restore();document.execCommand('insertText',false,'☐ ');snap();save();return;}
      }
    }
+   if((e.ctrlKey||e.metaKey)&&(e.key==='p'||e.key==='P')){e.preventDefault();post({type:'quickopen'});return;}
+   if(e.key==='F1'){e.preventDefault();post({type:'shortcuts'});return;}
    if(e.ctrlKey&&(e.key==='f'||e.key==='F'||e.key==='k'||e.key==='K')){e.preventDefault();post({type:'focussearch'});}
    else if(e.ctrlKey&&(e.key==='h'||e.key==='H')){e.preventDefault();post({type:'find'});}
    else if(e.key==='F11'){e.preventDefault();post({type:'togglefocus'});}
@@ -2254,6 +2534,50 @@ public sealed partial class MainWindow : Window
    closeWl();save();
  }
  ed.addEventListener('input',function(){var c=wlContext();if(c)showWl(c);else closeWl();});
+ // ---- Slash "/" command menu: type / at the start of a line to insert blocks ----
+ var slashCmds=[
+   {t:'Heading 1',d:'Big title',a:function(){exec('formatBlock','H1');}},
+   {t:'Heading 2',d:'Subheading',a:function(){exec('formatBlock','H2');}},
+   {t:'Heading 3',d:'Small heading',a:function(){exec('formatBlock','H3');}},
+   {t:'Bulleted list',d:'',a:function(){exec('insertUnorderedList');}},
+   {t:'Numbered list',d:'',a:function(){exec('insertOrderedList');}},
+   {t:'Checklist',d:'To-do',a:function(){document.execCommand('insertText',false,'☐ ');save();}},
+   {t:'Table',d:'3 by 3',a:function(){insertTable(3,3);}},
+   {t:'Equation',d:'Math (LaTeX)',a:function(){openMathEditor(null);}},
+   {t:'Divider',d:'Horizontal line',a:function(){exec('insertHorizontalRule');}},
+   {t:'Quote',d:'',a:function(){exec('formatBlock','BLOCKQUOTE');}},
+   {t:'Code block',d:'',a:function(){exec('formatBlock','PRE');}},
+   {t:'Date',d:'Today',a:function(){document.execCommand('insertText',false,new Date().toLocaleDateString());save();}}
+ ];
+ var slPop=null,slItems=[],slSel=0,slCtx=null;
+ function closeSl(){if(slPop){slPop.remove();slPop=null;}slItems=[];slCtx=null;}
+ function paintSl(){if(!slPop)return;var ch=slPop.children;for(var i=0;i<ch.length;i++)ch[i].className='wlitem'+(i===slSel?' sel':'');}
+ function slContext(){
+   var s=getSelection();if(!s.rangeCount)return null;var r=s.getRangeAt(0);if(!r.collapsed)return null;
+   var node=r.startContainer;if(node.nodeType!==3)return null;
+   var m=node.nodeValue.substring(0,r.startOffset).match(/(?:^|\s)\/([a-zA-Z0-9]*)$/);if(!m)return null;
+   return {node:node,start:r.startOffset-(m[1].length+1),end:r.startOffset,query:m[1]};
+ }
+ function showSl(ctx){
+   var q=ctx.query.toLowerCase();
+   slItems=slashCmds.filter(function(c){return c.t.toLowerCase().indexOf(q)>=0;}).slice(0,10);
+   if(!slItems.length){closeSl();return;}
+   slSel=0;slCtx=ctx;
+   if(!slPop){slPop=document.createElement('div');slPop.id='wlpop';document.body.appendChild(slPop);}
+   slPop.innerHTML='';
+   slItems.forEach(function(c,idx){var d=document.createElement('div');d.className='wlitem'+(idx===0?' sel':'');
+     d.innerHTML='<b>'+c.t+'</b>'+(c.d?(' <span style="opacity:.55">'+c.d+'</span>'):'');
+     d.onmousedown=function(ev){ev.preventDefault();chooseSl(idx);};slPop.appendChild(d);});
+   var rect=getSelection().getRangeAt(0).getBoundingClientRect();
+   slPop.style.left=Math.max(8,rect.left)+'px';slPop.style.top=(rect.bottom+4)+'px';
+ }
+ function chooseSl(idx){
+   var c=slItems[idx];if(!c||!slCtx)return;var node=slCtx.node;
+   node.nodeValue=node.nodeValue.substring(0,slCtx.start)+node.nodeValue.substring(slCtx.end);
+   var r=document.createRange();r.setStart(node,slCtx.start);r.collapse(true);var s=getSelection();s.removeAllRanges();s.addRange(r);snap();
+   closeSl();c.a();
+ }
+ ed.addEventListener('input',function(){var c=slContext();if(c)showSl(c);else closeSl();});
  function appendSource(url){
    var div=document.createElement('div');div.className='src';
    var small=document.createElement('small');small.appendChild(document.createTextNode('Source: '));
@@ -2271,6 +2595,7 @@ public sealed partial class MainWindow : Window
    try{findClose();}catch(e){}         // clear any find highlights from the previous note
    ed.innerHTML=html||'';
    try{renderMathIn(ed);}catch(e){}    // render any LaTeX in the loaded note
+   try{uInit();}catch(e){}             // reset undo history for the newly loaded note
    setTimeout(countWC,0);
    ed.spellcheck=!!o.spell;
    document.documentElement.style.setProperty('--rule',o.rule);
@@ -2368,13 +2693,14 @@ public sealed partial class MainWindow : Window
  var tblBar=document.getElementById('tblBar');
  function placeTblUi(){
    var c=curCell();
-   if(!c||!ed.contains(c)){tblBar.style.display='none';return;}
+   if(!c||!ed.contains(c)){tblBar.style.display='none';if(!colRz){gripTbl=null;layoutGrips();}return;}
    var tbl=c.closest('table');var r=tbl.getBoundingClientRect();
    tblBar.style.display='flex';
    var bw=tblBar.offsetWidth||300,bh=tblBar.offsetHeight||38;
    tblBar.style.left=Math.min(Math.max(6,r.left),window.innerWidth-bw-6)+'px';
    var top=r.top-bh-8;if(top<6)top=Math.min(r.bottom+8,window.innerHeight-bh-6);
    tblBar.style.top=top+'px';
+   gripTbl=tbl;layoutGrips();
  }
  document.getElementById('tRowAdd').onclick=tblRowAdd;
  document.getElementById('tRowDel').onclick=tblRowDel;
@@ -2382,6 +2708,47 @@ public sealed partial class MainWindow : Window
  document.getElementById('tColDel').onclick=tblColDel;
  document.getElementById('tHead').onclick=tblHeader;
  document.getElementById('tDel').onclick=tblDelete;
+ function tblAlign(al){var c=curCell();if(!c)return;var idx=cellIndex(c),tbl=c.closest('table');
+   Array.prototype.forEach.call(tbl.rows,function(rw){if(rw.children[idx])rw.children[idx].style.textAlign=al;});placeTblUi();save();}
+ document.getElementById('tAL').onclick=function(){tblAlign('left');};
+ document.getElementById('tAC').onclick=function(){tblAlign('center');};
+ document.getElementById('tAR').onclick=function(){tblAlign('right');};
+ // Word-style column resize via overlay grip handles at each column boundary. Grips are real
+ // elements (with their own cursor) laid over the table, so we never fight the editor's text
+ // caret cursor. They live outside #ed, so save() (which serializes #ed) never captures them.
+ var colGrips=document.createElement('div');colGrips.id='colGrips';document.body.appendChild(colGrips);
+ var colRz=null,gripTbl=null;
+ function layoutGrips(){
+   var tbl=gripTbl;
+   if(!tbl||!ed.contains(tbl)){colGrips.style.display='none';colGrips.innerHTML='';return;}
+   var head=tbl.rows[0];if(!head){colGrips.style.display='none';return;}
+   var tR=tbl.getBoundingClientRect();
+   colGrips.style.display='block';
+   var want=head.children.length;
+   while(colGrips.children.length>want)colGrips.removeChild(colGrips.lastChild);
+   while(colGrips.children.length<want){var g=document.createElement('div');g.className='colGrip';colGrips.appendChild(g);}
+   Array.prototype.forEach.call(head.children,function(cell,i){
+     var cr=cell.getBoundingClientRect();var g=colGrips.children[i];
+     g.dataset.idx=i;g.style.left=cr.right+'px';g.style.top=tR.top+'px';g.style.height=tR.height+'px';
+   });
+ }
+ colGrips.addEventListener('mousedown',function(e){
+   var g=e.target.closest?e.target.closest('.colGrip'):null;if(!g||!gripTbl)return;
+   e.preventDefault();var idx=+g.dataset.idx;var cell=gripTbl.rows[0].children[idx];if(!cell)return;
+   if(gripTbl.style.tableLayout!=='fixed'){gripTbl.style.width=gripTbl.getBoundingClientRect().width+'px';gripTbl.style.tableLayout='fixed';}
+   colRz={tbl:gripTbl,idx:idx,startX:e.clientX,startW:cell.getBoundingClientRect().width};
+   g.classList.add('drag');
+ });
+ document.addEventListener('mousemove',function(e){
+   if(!colRz)return;e.preventDefault();var w=Math.max(32,colRz.startW+(e.clientX-colRz.startX));
+   Array.prototype.forEach.call(colRz.tbl.rows,function(rw){var c=rw.children[colRz.idx];if(c)c.style.width=w+'px';});
+   layoutGrips();
+ });
+ document.addEventListener('mouseup',function(){
+   if(!colRz)return;colRz=null;
+   var d=colGrips.querySelector('.drag');if(d)d.classList.remove('drag');
+   layoutGrips();save();
+ });
  document.addEventListener('selectionchange',function(){if(document.activeElement===ed)placeTblUi();});
  ed.addEventListener('scroll',placeTblUi,true);window.addEventListener('resize',placeTblUi);
  // ---- Markdown-style shortcuts (type a marker then space) --------------------------
@@ -2456,7 +2823,8 @@ public sealed partial class MainWindow : Window
  function countWC(){
    var t=ed.innerText||'';var wc=document.getElementById('wc');if(!wc)return;
    var words=(t.match(/\S+/g)||[]).length,chars=t.replace(/\s/g,'').length;
-   wc.textContent=words+' words · '+chars+' chars';
+   var mins=Math.max(1,Math.round(words/200));
+   wc.textContent=words+' words · '+chars+' chars'+(words>0?(' · ~'+mins+' min read'):'');
  }
  ed.addEventListener('input',countWC);
  // ---- Math (KaTeX): render LaTeX pasted from AI chats + insert/edit equations --------
@@ -2564,6 +2932,7 @@ public sealed partial class MainWindow : Window
  function closeMathEditor(){mBox.style.display='none';mathTarget=null;}
  mIn.addEventListener('input',mathPreview);mDisp.addEventListener('change',mathPreview);
  document.getElementById('mathCancel').onclick=closeMathEditor;
+ document.getElementById('mathCopy').onclick=function(){try{navigator.clipboard&&navigator.clipboard.writeText(mIn.value||'');}catch(e){}};
  document.getElementById('mathDel').onclick=function(){if(mathTarget&&mathTarget.parentNode)mathTarget.parentNode.removeChild(mathTarget);closeMathEditor();save();};
  document.getElementById('mathOk').onclick=function(){
    var tex=(mIn.value||'').trim();if(!tex){closeMathEditor();return;}
@@ -2573,6 +2942,43 @@ public sealed partial class MainWindow : Window
    closeMathEditor();snap();save();
  };
  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&mBox.style.display==='block'){closeMathEditor();}});
+ // ---- Deep undo/redo: snapshot history covering typing, formatting, tables, images, and math.
+ // A MutationObserver captures every DOM change (debounced), so structural edits that bypass the
+ // browser's own undo stack (row/column edits, image resize/wrap/move, math insert/edit) are undoable.
+ var uHist=[],uIdx=-1,uTimer=null,uHold=false;
+ function uSnap(){                       // innerHTML with a caret marker so undo can restore the caret
+   uHold=true;var s=getSelection(),mk=null;
+   if(s.rangeCount&&ed.contains(s.anchorNode)){
+     try{mk=document.createElement('span');mk.setAttribute('data-ucaret','1');
+       var r=s.getRangeAt(0).cloneRange();r.collapse(true);r.insertNode(mk);}catch(e){mk=null;}
+   }
+   var html=ed.innerHTML;
+   if(mk&&mk.parentNode)mk.parentNode.removeChild(mk);
+   uHold=false;return html;
+ }
+ function uPush(){
+   if(uHold)return;var html=uSnap();
+   if(uIdx>=0&&uHist[uIdx]===html)return;
+   uHist=uHist.slice(0,uIdx+1);uHist.push(html);uIdx=uHist.length-1;
+   if(uHist.length>80){uHist.shift();uIdx--;}
+ }
+ function uPushSoon(){clearTimeout(uTimer);uTimer=setTimeout(uPush,450);}
+ function uApply(html){
+   uHold=true;
+   try{deselectImg();}catch(e){}
+   ed.innerHTML=html;
+   var mk=ed.querySelector('[data-ucaret]');
+   if(mk){var r=document.createRange();r.setStartAfter(mk);r.collapse(true);
+     if(mk.parentNode)mk.parentNode.removeChild(mk);
+     var s=getSelection();s.removeAllRanges();s.addRange(r);savedRange=r.cloneRange();}
+   try{renderMathIn(ed);}catch(e){}
+   try{countWC();}catch(e){}
+   uHold=false;
+ }
+ function uInit(){clearTimeout(uTimer);uHist=[uSnap()];uIdx=0;}
+ function doUndo(){clearTimeout(uTimer);uPush();if(uIdx<=0)return;uIdx--;uApply(uHist[uIdx]);save();}
+ function doRedo(){clearTimeout(uTimer);if(uIdx>=uHist.length-1)return;uIdx++;uApply(uHist[uIdx]);save();}
+ try{new MutationObserver(function(){if(!uHold)uPushSoon();}).observe(ed,{childList:true,subtree:true,attributes:true,characterData:true});}catch(e){}
  post({type:'ready'});
 </script></body></html>
 """;
@@ -2900,8 +3306,8 @@ public sealed partial class MainWindow : Window
     }
 
     // ----------------------------------------- Editor formatting (drives WebView2)
-    private void Undo_Click(object s, RoutedEventArgs e)     => EditorExec("undo");
-    private void Redo_Click(object s, RoutedEventArgs e)     => EditorExec("redo");
+    private void Undo_Click(object s, RoutedEventArgs e)     => _ = NoteWeb.CoreWebView2?.ExecuteScriptAsync("doUndo()");
+    private void Redo_Click(object s, RoutedEventArgs e)     => _ = NoteWeb.CoreWebView2?.ExecuteScriptAsync("doRedo()");
 
     private void Bold_Click(object s, RoutedEventArgs e)      => EditorExec("bold");
     private void Italic_Click(object s, RoutedEventArgs e)    => EditorExec("italic");
@@ -2927,7 +3333,11 @@ public sealed partial class MainWindow : Window
     private void Numbered_Click(object s, RoutedEventArgs e) => EditorExec("insertOrderedList");
     private void Checklist_Click(object s, RoutedEventArgs e) => EditorExec("insertText", "☐ ");
 
-    private void Highlight_Click(object s, RoutedEventArgs e) => EditorExec("hiliteColor", "#fff2a8");
+    private void Highlight_Click(object sender, RoutedEventArgs e)
+    {
+        EditorExec("hiliteColor", (sender as FrameworkElement)?.Tag as string ?? "#fff2a8");
+        HighlightFlyout.Hide();
+    }
 
     private void ColorDefault_Click(object s, RoutedEventArgs e) => EditorExec("foreColor", "inherit");
     private void ColorRed_Click(object s, RoutedEventArgs e)     => EditorExec("foreColor", "#d13438");
@@ -3164,9 +3574,9 @@ public sealed partial class MainWindow : Window
 
     private void CreateAndOpen(NoteType type, string title)
     {
-        // Create in the current folder when one is selected, otherwise unfiled.
+        // Create in the current folder when one is selected, otherwise unfiled in the current notebook.
         long? folder = _filter == ListFilter.Folder ? _filterId : (long?)null;
-        var note = _notes.CreateNote(title, type, folder);
+        var note = _notes.CreateNote(title, type, folder, _currentNotebookId);
 
         // Make sure the new note is visible in the list; if the active filter wouldn't show
         // it (e.g. a smart folder or trash), fall back to All Notes.
@@ -3486,6 +3896,12 @@ public sealed partial class MainWindow : Window
         Add(root, VirtualKey.K, FocusSearch);
         // Ctrl+H: find & replace within the current note.
         Add(root, VirtualKey.H, ToggleFindBar);
+        // Ctrl+P: quick-open a note by title.
+        Add(root, VirtualKey.P, () => { _ = ShowQuickOpen(); });
+        // F1: keyboard shortcut cheat sheet.
+        var f1 = new KeyboardAccelerator { Key = VirtualKey.F1 };
+        f1.Invoked += (s, e) => { _ = ShowShortcuts(); e.Handled = true; };
+        root.KeyboardAccelerators.Add(f1);
 
         // F11 toggles focus mode; Esc leaves it (for when focus is outside the WebView).
         var f11 = new KeyboardAccelerator { Key = VirtualKey.F11 };
@@ -3501,6 +3917,81 @@ public sealed partial class MainWindow : Window
             acc.Invoked += (_, e) => { action(); e.Handled = true; };
             el.KeyboardAccelerators.Add(acc);
         }
+    }
+
+    private sealed class QuickItem { public long Id; public string Title = ""; public override string ToString() => Title; }
+
+    /// <summary>Ctrl+P: type to jump to any note by title.</summary>
+    private async Task ShowQuickOpen()
+    {
+        var all = _notes.ListNotes().Select(n => new QuickItem { Id = n.Id, Title = EffectiveTitle(n) })
+            .OrderBy(x => x.Title, StringComparer.OrdinalIgnoreCase).ToList();
+        var box = new TextBox { PlaceholderText = "Jump to a note…" };
+        var list = new ListView { SelectionMode = ListViewSelectionMode.Single, MaxHeight = 340 };
+        void Filter(string q)
+        {
+            var items = string.IsNullOrWhiteSpace(q) ? all.Take(60).ToList()
+                : all.Where(x => x.Title.Contains(q, StringComparison.OrdinalIgnoreCase)).Take(60).ToList();
+            list.ItemsSource = items;
+            if (items.Count > 0) list.SelectedIndex = 0;
+        }
+        Filter("");
+        var panel = new StackPanel { Spacing = 8, Width = 460 };
+        panel.Children.Add(box);
+        panel.Children.Add(list);
+        var dlg = new ContentDialog { Title = "Quick open", Content = panel, CloseButtonText = "Close", XamlRoot = Content.XamlRoot };
+        void Open() { if (list.SelectedItem is QuickItem qi) { dlg.Hide(); ShowNote(qi.Id); SelectNoteInList(qi.Id); } }
+        box.TextChanged += (_, _) => Filter(box.Text);
+        box.KeyDown += (_, e) =>
+        {
+            if (e.Key == VirtualKey.Down) { list.SelectedIndex = Math.Min(list.SelectedIndex + 1, list.Items.Count - 1); e.Handled = true; }
+            else if (e.Key == VirtualKey.Up) { list.SelectedIndex = Math.Max(list.SelectedIndex - 1, 0); e.Handled = true; }
+            else if (e.Key == VirtualKey.Enter) { Open(); e.Handled = true; }
+        };
+        list.DoubleTapped += (_, _) => Open();
+        box.Loaded += (_, _) => box.Focus(FocusState.Programmatic);
+        await dlg.ShowAsync();
+    }
+
+    /// <summary>F1: a scrollable list of keyboard shortcuts.</summary>
+    private async Task ShowShortcuts()
+    {
+        var rows = new (string, string)[]
+        {
+            ("Ctrl+F / Ctrl+K", "Focus search"), ("Ctrl+P", "Quick open a note"),
+            ("Ctrl+H", "Find and replace in the note"), ("Ctrl+Z / Ctrl+Y", "Undo / redo"),
+            ("Ctrl+B / I / U", "Bold / italic / underline"), ("Ctrl+Shift+X", "Strikethrough"),
+            ("Ctrl+L / E / R / J", "Align left / center / right / justify"),
+            ("Ctrl+M / Ctrl+Shift+M", "Increase / decrease indent"),
+            ("Ctrl+Alt+1 / 2 / 0", "Heading 1 / heading 2 / body"),
+            ("Ctrl+Shift+7 / 8 / 9", "Numbered / bullet / checklist"),
+            ("Ctrl+= / Ctrl+Shift+=", "Subscript / superscript"),
+            ("Alt+Up / Alt+Down", "Move line up / down"), ("Ctrl+Shift+D", "Duplicate line"),
+            ("Alt+Shift+D", "Insert date"), ("Tab / Shift+Tab", "Next / previous table cell"),
+            ("/", "Slash command menu"), ("Ctrl+N / Ctrl+T", "New note / screenshot thread"),
+            ("Ctrl+V / Ctrl+Shift+V", "Paste image / paste as plain text"),
+            ("F11 / Esc", "Focus mode / leave"), ("Win+Alt+N", "Quick Note (global)"),
+        };
+        var grid = new Grid { ColumnSpacing = 24, RowSpacing = 7 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var mono = new Microsoft.UI.Xaml.Media.FontFamily("Consolas");
+        for (int i = 0; i < rows.Length; i++)
+        {
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var k = new TextBlock { Text = rows[i].Item1, FontFamily = mono };
+            var v = new TextBlock { Text = rows[i].Item2, Opacity = 0.85, TextWrapping = TextWrapping.Wrap };
+            Grid.SetRow(k, i); Grid.SetColumn(k, 0);
+            Grid.SetRow(v, i); Grid.SetColumn(v, 1);
+            grid.Children.Add(k); grid.Children.Add(v);
+        }
+        var dlg = new ContentDialog
+        {
+            Title = "Keyboard shortcuts",
+            Content = new ScrollViewer { Content = grid, MaxHeight = 470 },
+            CloseButtonText = "Close", XamlRoot = Content.XamlRoot,
+        };
+        await dlg.ShowAsync();
     }
 
     private void OnPasteAccelerator(KeyboardAcceleratorInvokedEventArgs e)
@@ -4327,6 +4818,8 @@ public sealed class NodeItem : System.ComponentModel.INotifyPropertyChanged
     public long Id { get; set; }
     public string Query { get; set; } = "";
     public string Glyph { get; set; } = "";
+    /// <summary>Folder accent color as #RRGGBB, or "" to follow the theme.</summary>
+    public string Color { get; set; } = "";
 
     private string _title = "";
     public string Title
@@ -4356,6 +4849,27 @@ public sealed class NodeItem : System.ComponentModel.INotifyPropertyChanged
         NodeKind.Trash      => "\uE74D",   // Delete / trash
         _ => "\uE8B7",
     };
+
+    /// <summary>Icon tint: the folder's accent color when set, else the theme's secondary brush.</summary>
+    public Microsoft.UI.Xaml.Media.Brush IconBrush
+    {
+        get
+        {
+            var c = Color;
+            if (!string.IsNullOrWhiteSpace(c) && c.Length >= 7 && c[0] == '#')
+            {
+                try
+                {
+                    byte r = System.Convert.ToByte(c.Substring(1, 2), 16);
+                    byte g = System.Convert.ToByte(c.Substring(3, 2), 16);
+                    byte b = System.Convert.ToByte(c.Substring(5, 2), 16);
+                    return new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, r, g, b));
+                }
+                catch { }
+            }
+            return (Microsoft.UI.Xaml.Media.Brush)Microsoft.UI.Xaml.Application.Current.Resources["TextFillColorSecondaryBrush"];
+        }
+    }
 
     public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
     private void Raise()
