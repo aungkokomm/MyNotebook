@@ -212,7 +212,7 @@ A **thread** is a special kind of note built for collecting screenshots in order
 
 - **Web/link:** select text → toolbar **link** button → paste a URL. (You can type a bare domain like `example.com`; it adds `https://` for you.)
 - **Wiki-links:** type `[[` and start typing a note's name to link to another note. A little list helps you pick.
-- **Backlinks:** open the backlinks panel to see which other notes link *to* the note you're reading.
+- **Backlinks:** in the editor toolbar (second row, the "Note tools" group, next to Focus mode), click the **Linked references** button, its tooltip reads "Linked references (backlinks)". A dropdown lists every note that links *to* the one you're reading. If nothing links to it, it says "No linked references."
 
 ---
 
