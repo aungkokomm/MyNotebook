@@ -1,8 +1,10 @@
-# My Notebook — User Guide
+# 📓 My Notebook — User Guide
 
 Welcome! This guide walks you through everything My Notebook can do, in plain language, one task at a time. You don't need to read it top to bottom, jump to whatever you're trying to do using the contents below.
 
 If you're brand new: My Notebook is a private, offline notebook for Windows. Your notes live in a folder on your own PC (never the cloud), and you organize them into **notebooks**, **folders**, and **notes**, a lot like OneNote.
+
+> 💡 **Tip for finding buttons:** the app uses small icons. **Hover any button** and a little label (its tooltip) tells you exactly what it does. Throughout this guide, buttons are named by that exact tooltip in **bold**, and the emoji are just visual hints, not the icon you'll see on screen.
 
 ---
 
@@ -10,24 +12,25 @@ If you're brand new: My Notebook is a private, offline notebook for Windows. You
 
 1. [The big picture: how things are organized](#1-the-big-picture)
 2. [Getting around the window](#2-getting-around-the-window)
-3. [Notebooks (Chemistry, Physics, …)](#3-notebooks)
-4. [Folders and notes](#4-folders-and-notes)
-5. [Coloring notebooks and folders](#5-coloring-notebooks-and-folders)
-6. [Writing and formatting a note](#6-writing-and-formatting-a-note)
-7. [Tables](#7-tables)
-8. [Pictures and images](#8-pictures-and-images)
-9. [Math equations](#9-math-equations)
-10. [Screenshot threads](#10-screenshot-threads)
-11. [Links and backlinks](#11-links-and-backlinks)
-12. [Searching](#12-searching)
-13. [Finding and replacing inside a note](#13-find-and-replace)
-14. [Exporting, printing, and sharing](#14-exporting-printing-and-sharing)
-15. [Reading a note aloud & recording audio](#15-voice)
-16. [Themes, colors, and paper](#16-themes-colors-and-paper)
-17. [Keeping your notes safe (backup & restore)](#17-backup--restore)
-18. [Undo, version history, and the trash](#18-undo-history-trash)
-19. [Keyboard shortcuts](#19-keyboard-shortcuts)
-20. [Frequently asked questions](#20-faq)
+3. [📚 Notebooks (Chemistry, Physics, …)](#3-notebooks)
+4. [🗂️ Folders and notes](#4-folders-and-notes)
+5. [🎨 Coloring notebooks and folders](#5-coloring-notebooks-and-folders)
+6. [✍️ Writing and formatting a note](#6-writing-and-formatting-a-note)
+7. [▦ Tables](#7-tables)
+8. [🖼️ Pictures and images](#8-pictures-and-images)
+9. [🧮 Math equations](#9-math-equations)
+10. [📸 Screenshot threads](#10-screenshot-threads)
+11. [🔗 Links and backlinks](#11-links-and-backlinks)
+12. [🔎 Searching](#12-searching)
+13. [🔁 Finding and replacing inside a note](#13-find-and-replace)
+14. [📤 Exporting, printing, and sharing](#14-exporting-printing-and-sharing)
+15. [🔊 Reading a note aloud & recording audio](#15-voice)
+16. [🎨 Themes, colors, and paper](#16-themes-colors-and-paper)
+17. [🛟 Keeping your notes safe (backup & restore)](#17-backup--restore)
+18. [↩️ Undo, version history, and the trash](#18-undo-history-and-the-trash)
+19. [⌨️ Keyboard shortcuts](#19-keyboard-shortcuts)
+20. [🧰 Toolbar at a glance](#20-toolbar-at-a-glance)
+21. [❓ Frequently asked questions](#21-faq)
 
 ---
 
@@ -46,7 +49,7 @@ Notebook   →   Folder (section)   →   Note (page)
 
 You switch between notebooks at the top-left; you pick folders and notes in the sidebar. Everything you create goes into whichever notebook you're currently viewing.
 
-> **Good to know:** Search always looks across *all* your notebooks at once, so you never lose track of something just because it's in a different notebook.
+> 💡 **Good to know:** Search always looks across *all* your notebooks at once, so you never lose track of something just because it's in a different notebook.
 
 ---
 
@@ -54,11 +57,11 @@ You switch between notebooks at the top-left; you pick folders and notes in the 
 
 The window has three columns, left to right:
 
-1. **The rail (far left).** At the very top is the **notebook switcher** (a book icon and the current notebook's name). Below it is a list of your folders, plus *All Notes*, *Unfiled*, smart searches, and the *Trash*. At the bottom are the *Timeline*, *Settings*, and *About* buttons.
-2. **The note list (middle).** Every note in whatever you selected on the left. New note and new thread buttons live at the top of this column.
-3. **The note itself (right).** The title, the formatting toolbar, and the page you're writing on.
+1. **The rail (far left).** At the very top is the **notebook switcher** 📓 (a book icon and the current notebook's name). Below it is a list of your folders, plus *All Notes*, *Unfiled*, smart searches, and the *Trash*. At the bottom are **Timeline** 🕓, **Settings** ⚙️, and **About** ℹ️.
+2. **The note list (middle).** Every note in whatever you selected on the left. The **Sort**, **Select multiple**, **New screenshot thread**, and blue **New note** buttons sit along the top of this column.
+3. **The note itself (right).** The title, the two-row formatting toolbar, and the page you're writing on.
 
-You can **drag the dividers** between columns to resize them, or **collapse** a side panel to get more writing room. The search box sits up in the title bar at the top.
+Up in the title bar you'll also find the **search box**, plus two buttons: **Hide / show folders** and **Hide / show the note list**, for collapsing side panels when you want more writing room. You can also **drag the dividers** between columns to resize them.
 
 ---
 
@@ -67,50 +70,47 @@ You can **drag the dividers** between columns to resize them, or **collapse** a 
 Notebooks are the top-level containers (like separate OneNote notebooks). Everything lives in one place on disk, so this is just about organizing, no extra files to manage.
 
 **Switch notebooks**
-- Click the **notebook name at the top-left** (the book icon). A menu drops down listing all your notebooks. Click one to switch to it. The sidebar and note list instantly show only that notebook's contents.
+- Click the **notebook name at the top-left** 📓 (tooltip: *Switch notebook*). A menu drops down listing all your notebooks. Click one to switch. The sidebar and note list instantly show only that notebook's contents.
 
 **Create a new notebook**
-- Open the notebook menu (click the name at the top-left) → **New notebook…** → type a name (for example *Physics*). You'll jump straight into the new, empty notebook.
+- Open that same menu → **New notebook…** → type a name (for example *Physics*). You'll jump straight into the new, empty notebook.
 
 **Rename a notebook**
 - Notebook menu → **Rename notebook…** → type the new name.
 
 **Delete a notebook**
-- Notebook menu → **Delete notebook…**. You'll be told how many notes it contains and asked to confirm. The notebook and its notes go to the **Trash** (they're recoverable, not instantly erased). You can't delete your last remaining notebook.
+- Notebook menu → **Delete notebook…**. You'll be told how many notes it contains and asked to confirm. The notebook and its notes go to the **Trash** (recoverable, not instantly erased). You can't delete your last remaining notebook.
 
-> **Tip:** The notebook you were last using is remembered, so the app opens right where you left off.
+> 💡 The notebook you were last using is remembered, so the app opens right where you left off.
 
 ---
 
 ## 4. Folders and notes
 
 **Create a folder**
-- Click the **New folder** button (the folder icon at the top of the rail), or right-click empty space in the rail. Type a name. To make a **subfolder**, right-click an existing folder → **New subfolder**.
+- Click the **New folder** 📁 button (the folder icon at the top of the rail, next to the notebook name). Type a name.
+- To make a **subfolder**, right-click an existing folder → **New subfolder**.
 
 **Create a note**
-- Click the blue **New note** button at the top of the middle column (or press **Ctrl+N**). If you have a folder selected, the note is created inside it; otherwise it lands in *Unfiled*.
+- Click the blue **New note** button (top of the middle column) or press **Ctrl+N**. If a folder is selected, the note is created inside it; otherwise it lands in *Unfiled*.
 
 **Move a note into a folder**
 - **Drag** the note from the middle list onto a folder in the rail, or right-click the note → **Move to** → pick a folder (or *Unfiled*).
 
-**Rename, pin, duplicate, or delete a note**
-- Right-click the note in the list:
-  - **Pin** keeps it at the top of the list.
-  - **Rename** changes its title.
-  - **Duplicate** makes a full copy (including its images).
-  - **Delete** sends it to the Trash.
+**Right-click a note for more** (in the middle list):
+- **Open**, **Pin** (keeps it at the top), **Rename**, **Duplicate** (a full copy, including its images), **Move to**, **Export**, **Print…**, **Version history…**, and **Delete** (sends it to the Trash).
 
-**Other useful views in the rail**
+**Other views in the rail**
 - **All Notes** — every note in the current notebook.
 - **Unfiled** — notes not in any folder.
-- **Trash** — deleted notes, where you can restore them or empty them for good.
-- **Timeline** (bottom of the rail) — browse everything by date (Today, Yesterday, this month, older).
+- **Trash** — deleted notes; restore them or empty the trash for good.
+- **Timeline** 🕓 (bottom of the rail) — browse everything by date (Today, Yesterday, this month, older).
 
 ---
 
 ## 5. Coloring notebooks and folders
 
-You can give notebooks and folders a color, OneNote-style, to tell them apart at a glance.
+Give notebooks and folders a color, OneNote-style, to tell them apart at a glance.
 
 **Color a notebook**
 - Open the notebook menu (top-left) → **Notebook color** → pick a swatch. The book icon takes on that color. Choose **Default** to clear it.
@@ -118,34 +118,34 @@ You can give notebooks and folders a color, OneNote-style, to tell them apart at
 **Color a folder**
 - Right-click the folder in the rail → **Folder color** → pick a swatch. The folder's icon takes on the color. Choose **Default** to clear it.
 
-There are ten colors to choose from, and the one currently in use is marked with a check.
+There are ten colors, and the one currently in use is marked with a check ✓.
 
 ---
 
 ## 6. Writing and formatting a note
 
-Click a note to open it, then just start typing in the big area on the right. The **title** is the box at the top; the date updates automatically.
+Click a note to open it, then start typing in the big area on the right. The **title** is the box at the top; the date updates automatically.
 
-The **toolbar** above the page has two rows of buttons. Hover any button to see what it does. Highlights:
+The **toolbar** above the page has **two rows**. Hover any button for its name. Here's what's where:
 
-- **Text styles:** headings and body text, **bold**, *italic*, underline, strikethrough, superscript/subscript, text color, and **highlight** (click the highlighter to pick a color, including a lime option).
-- **Lists:** bullet list, numbered list, and **checklists** (tick boxes).
-- **Blocks:** quote, code block, and a divider line.
-- **Alignment & indent:** left / center / right / justify, and increase/decrease indent.
-- **Insert:** link, table, picture, and an equation.
+**Row 1 (text formatting):** **Undo** ↩️ / **Redo** ↪️, **Paragraph styles** (Title / Heading / Body), **Smaller text** / **Bigger text**, **Font**, **Bold** / **Italic** / **Underline** / **Strikethrough**, **Superscript** / **Subscript**, **Text color** 🎨, **Highlight** 🖍️, **Clear formatting**, then the note tools: **Linked references (backlinks)**, **Focus mode**, **Read aloud** 🔊, **Record audio** 🎙️.
+
+**Row 2 (paragraph, structure & insert):** **Align left / center / right / Justify**, **Increase / Decrease indent**, **Bullet list** / **Numbered list** / **Checklist** ☑️, **Quote** / **Code block** / **Divider**, **Insert or edit link** 🔗, **Insert table** ▦, **Insert equation (math)** ƒx, **Insert picture from a file** 🖼️.
+
+**Highlight colors:** click **Highlight** 🖍️ to open a row of color swatches (yellow, lime, green, pink, blue, orange, purple) plus **No highlight** to clear.
 
 **Markdown shortcuts** (type a symbol then a space at the start of a line):
 - `# ` → big heading, `## ` → smaller heading
 - `- ` or `* ` → bullet, `1. ` → numbered list
 - `[] ` → checkbox, `> ` → quote, ` ``` ` → code block, `--- ` → divider
 
-**The slash menu:** type `/` on an empty line to pop up a quick menu of things to insert (headings, lists, table, equation, divider, quote, code, date, and more). Keep typing to filter, then press Enter.
+**The slash menu:** type `/` on an empty line for a quick insert menu (headings, lists, table, equation, divider, quote, code, date, and more). Keep typing to filter, then press Enter.
 
-**A few handy touches**
-- **Auto-save:** your work saves as you type. A small "Saved" note flickers near the title so you know.
-- **Insert today's date:** press **Alt+Shift+D**, or right-click → **Insert date**.
-- **Auto-links:** paste or type a web address and it becomes a clickable link automatically.
-- **Move a line up/down:** **Alt+Up / Alt+Down**. **Duplicate a line:** **Ctrl+Shift+D**.
+**Handy touches**
+- **Auto-save:** your work saves as you type; a small *Saved* note flickers near the title.
+- **Insert today's date:** **Alt+Shift+D**, or right-click → **Insert date**.
+- **Auto-links:** paste or type a web address and it becomes a clickable link.
+- **Move a line:** **Alt+Up / Alt+Down**. **Duplicate a line:** **Ctrl+Shift+D**.
 - **Word count & reading time** sit in the bottom-right corner of the page.
 
 ---
@@ -153,14 +153,14 @@ The **toolbar** above the page has two rows of buttons. Hover any button to see 
 ## 7. Tables
 
 **Insert a table**
-- Toolbar → the **table** button → pick a size from the little grid (for example 3×3).
+- On the toolbar's **second row**, click **Insert table** ▦ and choose a preset size from the menu (2×2, 3×3, 4×3, and so on).
 
 **Edit a table**
-- Click inside any cell and a small table toolbar appears. From it you can **add or remove rows and columns**, toggle a **header row**, set cell **alignment** (left/center/right), or **delete** the table.
+- Click inside any cell and a small table toolbar appears above the table. From it you can **add or remove rows and columns**, toggle a **header row**, set cell **alignment** (left / center / right), or **delete** the table.
 - **Tab** moves to the next cell; **Shift+Tab** moves back. Pressing Tab in the last cell adds a new row.
 
 **Resize a column (like in Word)**
-- Click anywhere in the table first. Then **hover the vertical border** between two columns, a colored resize handle appears and the cursor becomes a ↔ arrow. **Drag** it left or right to make the column narrower or wider.
+- Click anywhere in the table first. Then **hover the vertical border** between two columns, a blue resize handle appears and the cursor becomes a ↔ arrow. **Drag** it left or right to make the column narrower or wider.
 
 ---
 
@@ -169,15 +169,12 @@ The **toolbar** above the page has two rows of buttons. Hover any button to see 
 **Add a picture**
 - **Paste** a screenshot or copied image with **Ctrl+V**, it drops in at full resolution.
 - **Drag** an image file from File Explorer straight onto the page.
-- Or use the toolbar's **insert picture** button to choose a file.
+- Or click **Insert picture from a file** 🖼️ (toolbar's second row) to choose a file.
 
 **Resize and arrange**
 - Click an image to select it, then **drag any corner** to resize (it snaps to sensible sizes).
-- Use the little toolbar on the image to **wrap text** around it (inline, left, right, or on its own line), or **drag** the image to move it.
+- Use the small toolbar on the image to **wrap text** around it (inline, left, right, or its own line), or **drag** the image to move it.
 - Transparent PNGs stay transparent.
-
-**View at full size**
-- Double-click an image to open it in a floating 100% viewer window.
 
 ---
 
@@ -189,7 +186,7 @@ My Notebook renders real math using KaTeX, completely offline.
 - Copy an equation from Copilot, ChatGPT, or Claude and **paste** it, it turns into proper math (fractions, integrals, sums, even matrices), not raw text.
 
 **Write your own**
-- Toolbar → the **equation** button. Type your LaTeX and watch the live preview. Insert when it looks right.
+- On the toolbar's **second row**, click **Insert equation (math)** ƒx. Type your LaTeX and watch the live preview. Insert when it looks right.
 
 **Edit or copy an equation**
 - Click an existing equation to edit it. The editor also has a **Copy LaTeX** button if you want the underlying code.
@@ -198,21 +195,22 @@ My Notebook renders real math using KaTeX, completely offline.
 
 ## 10. Screenshot threads
 
-A **thread** is a special kind of note built for collecting screenshots in order, great for step-by-step captures, receipts, or research.
+A **thread** is a special note built for collecting screenshots in order, great for step-by-step captures, receipts, or research.
 
-- Create one with **Ctrl+T**, or the **New thread** button.
+- Create one with **Ctrl+T** or the **New screenshot thread** button (top of the middle column).
 - **Paste** screenshots with **Ctrl+V**, each becomes a numbered card in a connected timeline.
-- **Drag** cards to reorder them.
+- **Drag** a card to reorder it.
 - Every screenshot is **OCR-scanned**, so the text inside your images becomes searchable.
-- Right-click a card to export or delete it, or export all images at once.
+- **Click** a card to view it at 100% in a floating window.
+- **Right-click** a card for **View at 100%**, **Copy image**, **Export image…**, or **Delete image**. The **Export all** button at the top saves every image in the thread to a folder.
 
 ---
 
 ## 11. Links and backlinks
 
-- **Web/link:** select text → toolbar **link** button → paste a URL. (You can type a bare domain like `example.com`; it adds `https://` for you.)
-- **Wiki-links:** type `[[` and start typing a note's name to link to another note. A little list helps you pick.
-- **Backlinks:** in the editor toolbar (second row, the "Note tools" group, next to Focus mode), click the **Linked references** button, its tooltip reads "Linked references (backlinks)". A dropdown lists every note that links *to* the one you're reading. If nothing links to it, it says "No linked references."
+- **Web/link:** select text → **Insert or edit link** 🔗 (toolbar's second row) → paste a URL. You can type a bare domain like `example.com`; it adds `https://` for you.
+- **Wiki-links:** type `[[` and start typing a note's name to link to another note; a little list helps you pick.
+- **Backlinks:** on the toolbar's **first row** (at the right end, next to **Focus mode**), click **Linked references (backlinks)**. A dropdown lists every note that links *to* the one you're reading. If nothing links to it, it says "No linked references."
 
 ---
 
@@ -238,67 +236,70 @@ The search box lives in the **title bar** at the top (press **Ctrl+F** or **Ctrl
 
 ## 13. Find and replace
 
-Inside the open note, press **Ctrl+H** to find and replace. It highlights **every** match with a live counter (like "3 / 12"), lets you match case, step through matches, and replace one or all.
+Inside the open note, press **Ctrl+H** to open the find-and-replace bar. It highlights **every** match with a live counter (like "3 / 12"), lets you **Match case**, step through matches with ‹ / › (or Enter / Shift+Enter), and **Replace** one or **All**.
 
 ---
 
 ## 14. Exporting, printing, and sharing
 
-Right-click a note (or use its menu) → **Export**:
+**A single note** — right-click it (or use its menu) → **Export**:
+- **PDF…** — a print-ready document.
+- **Web page (HTML)…** — one self-contained file you can share; images and math are baked in, so it works offline.
+- **Word (.docx)…** — opens in Microsoft Word.
 
-- **PDF** — a print-ready document.
-- **Word (.docx)** — opens in Microsoft Word.
-- **Web page (HTML)** — a single self-contained file you can share; images and math are baked in, so it works offline.
-- **Markdown** — plain-text with formatting marks.
-- **Print** — send straight to a printer.
+Right below Export, **Print…** sends the note straight to a printer.
 
-You can also **export a whole folder to PDF** from a folder's right-click menu.
+**A whole folder** — right-click a folder → **Export folder to PDF…**.
+
+**Everything as Markdown** — open **Settings** ⚙️ → the **Data** section → **Export all (Markdown)**, which writes every note as a `.md` file into a folder you choose.
 
 ---
 
 ## 15. Voice
 
-- **Read aloud:** open a note and use the **read** button to have it spoken with text-to-speech.
-- **Record audio:** use the **record** button to capture audio straight into a note.
+Both live on the toolbar's **first row**, at the right end:
+
+- **Read aloud** 🔊 — has the open note spoken with text-to-speech.
+- **Record audio** 🎙️ — captures audio straight into the note.
 
 ---
 
 ## 16. Themes, colors, and paper
 
-Open **Settings** (bottom of the rail) to make it yours:
+Open **Settings** ⚙️ (bottom of the rail) to make it yours:
 
 - **Light / Dark**, plus **eight accent color themes** that recolor the whole app.
 - An **intensity dial** for how strong the tint is.
 - **Page color** and **paper style** (ruled, grid, dotted, or notebook lines) for the writing area.
 - **Language:** English or Portuguese.
-- **Font size** for the editor.
+- **Editor font size.**
 
-**Focus mode:** press **F11** for a distraction-free, full-width writing view; **Esc** or F11 leaves it.
+**Focus mode:** press **F11** (or **Focus mode** on the toolbar's first row) for a distraction-free, full-width view; **Esc** or F11 leaves it.
 
 ---
 
 ## 17. Backup & restore
 
-Your notes live **only on your PC**, so keeping a copy is worth a minute now and then.
+Your notes live **only on your PC**, so keeping a copy is worth a minute now and then. All of this is in **Settings** ⚙️ → the **Data** section:
 
 **Make a backup**
-- **Settings → Back up to `.zip`**. Save the file somewhere safe (an external drive or a cloud-synced folder). It contains all your notes, images, and settings.
+- **Back up to .zip** → save the file somewhere safe (an external drive or a cloud-synced folder). It contains all your notes, images, and settings.
 
 **Restore a backup**
-- **Settings → Restore from backup** → pick a `.zip` (or one of the app's automatic snapshots). The app applies it on the next restart.
+- **Restore from backup…** → pick a `.zip` (or a `notebook_*.db` snapshot). Your current notes are saved to the Backups folder first, then the app restarts and applies the restore.
 
 **Automatic safety net**
-- The app quietly keeps **rolling snapshots** of your notes in `Data/Backups/` next to the program, just in case.
+- The app keeps the **last 10 automatic snapshots** in a `Data/Backups/` folder next to the program.
 
-> **Moving to a new PC?** Copy the whole app folder (or just its `Data/` folder) across, everything comes with it. You can even run it from a USB stick.
+> 💡 **Moving to a new PC?** Copy the whole app folder (or just its `Data/` folder) across, everything comes with it. You can even run it from a USB stick.
 
 ---
 
 ## 18. Undo, history, and the trash
 
-- **Undo / redo:** **Ctrl+Z** and **Ctrl+Y**. This covers not just typing but structural edits too, tables, images, and equations.
-- **Version history:** right-click a note → **Version history** to see automatic snapshots over time and restore an older version.
-- **Trash:** deleted notes (and deleted notebooks' notes) go to the **Trash** in the rail. Restore them, or empty the trash to remove them for good.
+- **Undo / redo:** **Ctrl+Z** and **Ctrl+Y** (also the **Undo** / **Redo** buttons on the toolbar's first row). This covers not just typing but structural edits too, tables, images, and equations.
+- **Version history:** right-click a note → **Version history…** to see automatic snapshots over time and restore an older version.
+- **Trash:** deleted notes (and a deleted notebook's notes) go to the **Trash** in the rail. Restore them, or empty the trash to remove them for good.
 
 ---
 
@@ -329,7 +330,44 @@ Your notes live **only on your PC**, so keeping a copy is worth a minute now and
 
 ---
 
-## 20. FAQ
+## 20. Toolbar at a glance
+
+The editor toolbar sits above the page in **two rows**. Hover any button for its exact name. (The emoji below are hints; the app shows small line icons.)
+
+**Row 1 — text formatting**
+
+| Hint | Button (hover tooltip) |
+|---|---|
+| ↩️ ↪️ | **Undo (Ctrl+Z)** · **Redo (Ctrl+Y)** |
+| ¶ | **Paragraph styles** (Title / Heading / Body) |
+| A− A+ | **Smaller text** · **Bigger text** |
+| Aa | **Font** |
+| **B** *I* U S̶ | **Bold** · **Italic** · **Underline** · **Strikethrough** |
+| x² x₂ | **Superscript** · **Subscript** |
+| 🎨 | **Text color** |
+| 🖍️ | **Highlight** (color swatches) |
+| Tx | **Clear formatting** |
+| 📄 | **Linked references (backlinks)** |
+| 🎯 | **Focus mode (F11)** |
+| 🔊 | **Read aloud** |
+| 🎙️ | **Record audio** |
+
+**Row 2 — paragraph, structure & insert**
+
+| Hint | Button (hover tooltip) |
+|---|---|
+| ⬅️ | **Align left / center / right** · **Justify** |
+| ⇥ ⇤ | **Increase indent** · **Decrease indent** |
+| • 1. ☑️ | **Bullet list** · **Numbered list** · **Checklist** |
+| ❝ `</>` ― | **Quote** · **Code block** · **Divider** |
+| 🔗 | **Insert or edit link** |
+| ▦ | **Insert table** |
+| ƒx | **Insert equation (math)** |
+| 🖼️ | **Insert picture from a file** |
+
+---
+
+## 21. FAQ
 
 **Where are my notes stored?**
 In a `Data/` folder right next to the app, plain files on your PC. No cloud, no account.
@@ -347,7 +385,7 @@ Yes, copy the app folder (or just `Data/`) to the other PC, or run it from a USB
 That's intended, search spans every notebook so nothing gets lost. Use the folders and notebook switcher to browse a single area.
 
 **Something looks wrong or I lost a note.**
-Check the **Trash** in the rail first, and **Version history** on the note (right-click → Version history). There are also automatic snapshots in **Settings → Restore from backup**.
+Check the **Trash** in the rail first, and **Version history…** on the note (right-click). There are also automatic snapshots in **Settings → Restore from backup…**.
 
 ---
 
