@@ -15,6 +15,12 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
 </p>
 
+<p align="center">
+  <a href="../../releases"><b>⬇️ Download</b></a>
+  &nbsp;·&nbsp;
+  <a href="docs/USER_GUIDE.md"><b>📖 User Guide</b></a>
+</p>
+
 ---
 
 ## ⬇️ Download
