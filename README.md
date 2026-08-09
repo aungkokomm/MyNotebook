@@ -24,6 +24,9 @@ Head to the [**Releases**](../../releases) page and run the latest
 `MyNotebook_Setup_vX.Y.Z.exe`. It installs **without admin rights**, runs **portable**, and
 **never touches your data** on upgrade. First launch even comes with a few sample notes.
 
+> 📖 **New here, or not sure how a feature works? Read the [User Guide](docs/USER_GUIDE.md)** — a
+> plain-language, task-by-task walkthrough of everything the app does.
+
 ## 🤔 Why another note app?
 
 Because the popular ones each ask you to give something up:
