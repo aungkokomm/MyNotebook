@@ -30,13 +30,20 @@
                 </InfoBar>
 
                 <TextBlock l:L.Key="about.desc" TextWrapping="Wrap" Opacity="0.85"
-                           Text="A fast, private, local-first notebook for Windows 11: rich notes and OCR-searchable screenshot threads, with a Myanmar-aware search. No account, no cloud." />
+                           Text="A fast, private, local-first notebook for Windows 10 and 11: rich notes and OCR-searchable screenshot threads, with a Myanmar-aware search. No account, no cloud." />
 
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                     <FontIcon Glyph="&#xE71B;" FontSize="14" Opacity="0.8" />
                     <HyperlinkButton x:Name="RepoLink" Padding="0"
                                      Content="github.com/aungkokomm/MyNotebook"
                                      NavigateUri="https://github.com/aungkokomm/MyNotebook" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <FontIcon Glyph="&#xE897;" FontSize="14" Opacity="0.8" />
+                    <HyperlinkButton x:Name="GuideLink" l:L.Key="about.guide" Padding="0"
+                                     Content="User Guide — how to use every feature"
+                                     NavigateUri="https://github.com/aungkokomm/MyNotebook/blob/main/docs/USER_GUIDE.md" />
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" Spacing="8">

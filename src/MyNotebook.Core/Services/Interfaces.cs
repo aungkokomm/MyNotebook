@@ -102,6 +102,9 @@ public interface INoteService
     /// <summary>Notes in a folder (folderId set) or all notes; optionally scoped to one notebook.</summary>
     IReadOnlyList<Note> ListNotes(long? folderId = null, bool includeDeleted = false, long? notebookId = null);
 
+    /// <summary>Persist a manual order for notes (ids in the desired order → sort_order 0,1,2,…).</summary>
+    void ReorderNotes(IReadOnlyList<long> orderedIds);
+
     /// <summary>All non-deleted notes ordered for the Timeline by the given axis, newest first.</summary>
     IReadOnlyList<Note> ListTimeline(TimelineAxis axis = TimelineAxis.Modified);
 

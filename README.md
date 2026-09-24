@@ -1,14 +1,14 @@
 <h1 align="center">📓 My Notebook</h1>
 
 <p align="center">
-  <b>A fast, private, local-first notebook for Windows 11.</b><br>
+  <b>A fast, private, local-first notebook for Windows 10 and 11.</b><br>
   Rich notes, screenshot threads with OCR-searchable images, math equations, a Myanmar-aware
   search that actually works, color themes, and export anywhere, all in a portable folder.
   No account. No cloud. Your notes stay yours.
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/platform-Windows%2011-0078D6" alt="Windows 11">
+  <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6" alt="Windows 10/11">
   <img src="https://img.shields.io/badge/.NET-8.0-512BD4" alt=".NET 8">
   <img src="https://img.shields.io/badge/UI-WinUI%203-5C2D91" alt="WinUI 3">
   <a href="../../releases"><img src="https://img.shields.io/github/v/release/aungkokomm/MyNotebook?label=download" alt="Latest release"></a>
@@ -166,7 +166,7 @@ MyNotebook/
 
 ## 🏗️ Build from source
 
-Requires **Windows 11 x64** and the **.NET 8 SDK**. Build the WinUI app with **Visual Studio
+Requires **Windows 10/11 x64** and the **.NET 8 SDK**. Build the WinUI app with **Visual Studio
 MSBuild**, not `dotnet build`, because the .NET CLI MSBuild lacks the WinUI PRI-packaging task
 (`MSB4062`).
 
@@ -211,4 +211,4 @@ Released under the [MIT License](LICENSE).
 
 ---
 
-<p align="center"><sub>Built for Windows 11 · local-first · made for notes that stay yours.</sub></p>
+<p align="center"><sub>Built for Windows 10 and 11 · local-first · made for notes that stay yours.</sub></p>

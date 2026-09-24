@@ -197,6 +197,8 @@
                                         <MenuFlyoutItem Text="Recently edited" Tag="modified" Click="Sort_Click" />
                                         <MenuFlyoutItem Text="Recently created" Tag="created" Click="Sort_Click" />
                                         <MenuFlyoutItem Text="Title (A–Z)" Tag="title" Click="Sort_Click" />
+                                        <MenuFlyoutSeparator />
+                                        <MenuFlyoutItem Text="Manual (drag to reorder)" Tag="manual" Click="Sort_Click" />
                                     </MenuFlyout>
                                 </Button.Flyout>
                             </Button>
@@ -222,6 +224,7 @@
                 <ListView x:Name="NoteList" Grid.Row="1" SelectionMode="Extended" IsItemClickEnabled="False"
                           SelectionChanged="NoteList_SelectionChanged"
                           CanDragItems="True" DragItemsStarting="NoteList_DragItemsStarting"
+                          DragItemsCompleted="NoteList_DragItemsCompleted"
                           RightTapped="NoteList_RightTapped" KeyDown="NoteList_KeyDown">
                     <ListView.ItemContainerStyle>
                         <Style TargetType="ListViewItem">
@@ -403,9 +406,8 @@
                             Margin="2,8,8,0" CornerRadius="8,8,0,0" BorderThickness="0,0,0,1"
                             Background="{ThemeResource LayerFillColorDefaultBrush}"
                             BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
-                      <StackPanel Orientation="Vertical" Spacing="4">
-                        <!-- Row 1: text formatting -->
-                        <StackPanel Orientation="Horizontal" Spacing="1" VerticalAlignment="Center">
+                      <!-- One wrapping row: a wide window shows a single line; a narrow one wraps. -->
+                      <local:WrapPanel HorizontalSpacing="1" VerticalSpacing="6">
                             <!-- Undo / redo -->
                             <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Undo (Ctrl+Z)" Click="Undo_Click">
                                 <FontIcon Glyph="&#xE7A7;" FontSize="15" />
@@ -534,9 +536,7 @@
                             <Button x:Name="RecordButton" Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Record audio" Click="RecordAudio_Click">
                                 <FontIcon x:Name="RecordIcon" Glyph="&#xE720;" FontSize="15" />
                             </Button>
-                        </StackPanel>
-                        <!-- Row 2: paragraph, structure & insert -->
-                        <StackPanel Orientation="Horizontal" Spacing="1" VerticalAlignment="Center">
+                            <Rectangle Style="{StaticResource FmtSeparator}" />
                             <!-- Alignment -->
                             <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Align left (Ctrl+L)" Click="AlignLeft_Click">
                                 <FontIcon Glyph="&#xE8E4;" FontSize="15" />
@@ -622,8 +622,7 @@
                             <Button Style="{StaticResource FmtButton}" ToolTipService.ToolTip="Insert picture from a file" Click="InsertImageFile_Click">
                                 <FontIcon Glyph="&#xE91B;" FontSize="15" />
                             </Button>
-                        </StackPanel>
-                      </StackPanel>
+                      </local:WrapPanel>
                     </Border>
 
                     <!-- The page: the rounded-bottom body of the editor card, flush under the toolbar. -->

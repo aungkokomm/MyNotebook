@@ -296,6 +296,25 @@ public sealed class NoteService : INoteService
         cmd.ExecuteNonQuery();
     }
 
+    public void ReorderNotes(IReadOnlyList<long> orderedIds)
+    {
+        using var con = _storage.OpenConnection();
+        using var tx = con.BeginTransaction();
+        using var cmd = con.CreateCommand();
+        cmd.Transaction = tx;
+        // sort_order only; not an edit, so updated_at is left untouched.
+        cmd.CommandText = "UPDATE Notes SET sort_order=$s WHERE id=$id";
+        var pS = cmd.CreateParameter(); pS.ParameterName = "$s"; cmd.Parameters.Add(pS);
+        var pId = cmd.CreateParameter(); pId.ParameterName = "$id"; cmd.Parameters.Add(pId);
+        for (int i = 0; i < orderedIds.Count; i++)
+        {
+            pS.Value = i;
+            pId.Value = orderedIds[i];
+            cmd.ExecuteNonQuery();
+        }
+        tx.Commit();
+    }
+
     public void SetPinned(long noteId, bool pinned)
     {
         using var con = _storage.OpenConnection();

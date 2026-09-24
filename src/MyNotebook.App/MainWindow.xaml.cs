@@ -33,6 +33,56 @@ public partial class ColumnSizer : Grid
     public ColumnSizer() => ProtectedCursor = InputSystemCursor.Create(InputSystemCursorShape.SizeWestEast);
 }
 
+/// <summary>
+/// Lays children left-to-right, wrapping to a new line when they don't fit the width.
+/// The editor toolbar uses it so a wide window shows one row and a narrow one wraps.
+/// </summary>
+public sealed partial class WrapPanel : Microsoft.UI.Xaml.Controls.Panel
+{
+    public double HorizontalSpacing { get; set; }
+    public double VerticalSpacing { get; set; }
+
+    protected override Windows.Foundation.Size MeasureOverride(Windows.Foundation.Size available)
+    {
+        double max = double.IsInfinity(available.Width) ? double.PositiveInfinity : available.Width;
+        double lineW = 0, lineH = 0, totalW = 0, totalH = 0;
+        foreach (var child in Children)
+        {
+            child.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+            var d = child.DesiredSize;
+            if (lineW > 0 && lineW + HorizontalSpacing + d.Width > max)
+            {
+                totalW = Math.Max(totalW, lineW);
+                totalH += lineH + VerticalSpacing;
+                lineW = 0; lineH = 0;
+            }
+            lineW += (lineW > 0 ? HorizontalSpacing : 0) + d.Width;
+            lineH = Math.Max(lineH, d.Height);
+        }
+        totalW = Math.Max(totalW, lineW);
+        totalH += lineH;
+        return new Windows.Foundation.Size(double.IsInfinity(max) ? totalW : Math.Min(totalW, max), totalH);
+    }
+
+    protected override Windows.Foundation.Size ArrangeOverride(Windows.Foundation.Size final)
+    {
+        double x = 0, y = 0, lineH = 0;
+        foreach (var child in Children)
+        {
+            var d = child.DesiredSize;
+            if (x > 0 && x + HorizontalSpacing + d.Width > final.Width)
+            {
+                x = 0; y += lineH + VerticalSpacing; lineH = 0;
+            }
+            if (x > 0) x += HorizontalSpacing;
+            child.Arrange(new Windows.Foundation.Rect(x, y, d.Width, d.Height));
+            x += d.Width;
+            lineH = Math.Max(lineH, d.Height);
+        }
+        return final;
+    }
+}
+
 public sealed partial class MainWindow : Window
 {
     private readonly INoteService _notes;
@@ -395,6 +445,7 @@ public sealed partial class MainWindow : Window
         {
             "created" => notes.OrderByDescending(n => trash || n.Pinned).ThenByDescending(n => n.CreatedAt),
             "title" => notes.OrderByDescending(n => trash || n.Pinned).ThenBy(n => EffectiveTitle(n), StringComparer.OrdinalIgnoreCase),
+            "manual" => notes.OrderByDescending(n => trash || n.Pinned).ThenBy(n => n.SortOrder).ThenByDescending(n => n.UpdatedAt),
             _ => notes.OrderByDescending(n => trash || n.Pinned).ThenByDescending(n => n.UpdatedAt),
         }).ToList();
         // The OrderByDescending(pinned) above also pulls non-pinned together; reassert pin-first.
@@ -416,6 +467,13 @@ public sealed partial class MainWindow : Window
         NoteListCount.Text = ordered.Count == 1 ? "1 note" : $"{ordered.Count} notes";
         NoteListEmpty.Visibility = ordered.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         if (_current is not null) SelectNoteInList(_current.Id);
+
+        // Drag-to-reorder is only meaningful in Manual sort, and only for the real note lists
+        // (not computed views like a smart folder, tag, or the trash).
+        bool canReorder = _sortMode == "manual" && !_selectMode
+            && _filter is ListFilter.AllNotes or ListFilter.Folder or ListFilter.Unfiled;
+        NoteList.CanReorderItems = canReorder;
+        NoteList.AllowDrop = canReorder;
     }
 
     private string NoteSubtitle(Note n)
@@ -663,6 +721,14 @@ public sealed partial class MainWindow : Window
         if (ids.Count == 0) { e.Cancel = true; return; }
         e.Data.SetText("mnb-notes:" + string.Join(",", ids));
         e.Data.RequestedOperation = DataPackageOperation.Move;
+    }
+
+    // After a Manual-sort drag, persist the list's new order into each note's sort_order.
+    private void NoteList_DragItemsCompleted(ListViewBase sender, DragItemsCompletedEventArgs args)
+    {
+        if (_sortMode != "manual") return;
+        var ids = _noteRows.Select(r => r.Id).ToList();
+        if (ids.Count > 0) _notes.ReorderNotes(ids);
     }
 
     private void Rail_DragOver(object sender, DragEventArgs e)

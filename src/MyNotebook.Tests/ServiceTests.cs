@@ -113,6 +113,21 @@ public class NotebookTests
         Assert.Equal(physFolder.Id, moved.FolderId);
         Assert.Equal(phys.Id, moved.NotebookId);
     }
+
+    [Fact]
+    public void ReorderNotes_persists_a_manual_order()
+    {
+        using var fx = new NotebookFixture();
+        var a = fx.Notes.CreateNote("A");
+        var b = fx.Notes.CreateNote("B");
+        var c = fx.Notes.CreateNote("C");
+
+        fx.Notes.ReorderNotes(new[] { c.Id, a.Id, b.Id });
+
+        // ListNotes orders by pinned, then sort_order — so the manual order shows through.
+        var ids = fx.Notes.ListNotes().Select(n => n.Id).ToList();
+        Assert.Equal(new[] { c.Id, a.Id, b.Id }, ids);
+    }
 }
 
 public class TimelineTests
