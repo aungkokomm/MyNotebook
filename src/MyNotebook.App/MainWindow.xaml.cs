@@ -106,6 +106,7 @@ public sealed partial class MainWindow : Window
 
     // Search: term to scroll-to/highlight after opening a result
     private string _jumpTerm = "";
+    private string _jumpBid = "";     // block to scroll to after a note loads (block deep-link)
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _searchTimer;
     private string _pendingSearch = "";
 
@@ -1685,7 +1686,12 @@ public sealed partial class MainWindow : Window
                 ApplyAutoTitle(m.Text);
                 break;
             case "opennote":
-                if (m.Id > 0) ShowNote(m.Id);
+                if (m.Id > 0)
+                {
+                    if (_current?.Id == m.Id && !string.IsNullOrEmpty(m.Bid))
+                        _ = NoteWeb.CoreWebView2!.ExecuteScriptAsync($"jumpToBid({JsonSerializer.Serialize(m.Bid)})");
+                    else { _jumpBid = m.Bid ?? ""; ShowNote(m.Id); }
+                }
                 break;
             case "openurl":
                 var u = m.Src ?? "";
@@ -1757,6 +1763,13 @@ public sealed partial class MainWindow : Window
             _jumpTerm = "";
             _ = NoteWeb.CoreWebView2.ExecuteScriptAsync(
                 $"setTimeout(function(){{highlightTerm({JsonSerializer.Serialize(term)});}},120)");
+        }
+        if (_jumpBid.Length > 0)   // opened from a block deep-link → scroll to + flash the block
+        {
+            var bid = _jumpBid;
+            _jumpBid = "";
+            _ = NoteWeb.CoreWebView2.ExecuteScriptAsync(
+                $"setTimeout(function(){{jumpToBid({JsonSerializer.Serialize(bid)});}},140)");
         }
     }
 
@@ -2035,12 +2048,44 @@ public sealed partial class MainWindow : Window
             time.CustomItemSelected += (_, _) => EditorInsert(DateTime.Now.ToString("t"));
             items.Add(date);
             items.Add(time);
+
+            // Copy a link that jumps to the right-clicked block (paste it into any note).
+            var blk = sender.Environment.CreateContextMenuItem(
+                "Copy link to this block", null, CoreWebView2ContextMenuItemKind.Command);
+            blk.CustomItemSelected += (_, _) => { _ = CopyBlockLinkAsync(); };
+            items.Add(blk);
         }
         catch { /* fall back to the default menu */ }
     }
 
     private void EditorInsert(string text)
         => _ = NoteWeb.CoreWebView2?.ExecuteScriptAsync($"insertPlainText({JsonSerializer.Serialize(text)})");
+
+    // Tag the right-clicked block with a stable id and put a paste-able deep-link token on the clipboard.
+    private async Task CopyBlockLinkAsync()
+    {
+        if (_current is null || NoteWeb.CoreWebView2 is null) return;
+        string res;
+        try { res = await NoteWeb.CoreWebView2.ExecuteScriptAsync("blockLinkToken()"); }
+        catch { return; }
+        if (string.IsNullOrEmpty(res) || res == "null") return;
+        BlockLink? bl;
+        try { bl = JsonSerializer.Deserialize<BlockLink>(res, JsonOpts); }
+        catch { return; }
+        if (bl is null || string.IsNullOrEmpty(bl.Bid)) return;
+
+        var title = EffectiveTitle(_current);
+        if (string.IsNullOrWhiteSpace(title)) title = "note";
+        var label = string.IsNullOrWhiteSpace(bl.Label) ? title : $"{title} ▸ {bl.Label}";
+        var token = $"mnb-blocklink:{_current.Id}:{bl.Bid}:{label}";
+        try
+        {
+            var dp = new Windows.ApplicationModel.DataTransfer.DataPackage();
+            dp.SetText(token);
+            Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(dp);
+        }
+        catch { }
+    }
 
     private async Task PastePlainAsync()
     {
@@ -2071,6 +2116,13 @@ public sealed partial class MainWindow : Window
         public string? Text { get; set; }
         public string? Data { get; set; }
         public string? Src { get; set; }
+        public string? Bid { get; set; }
+    }
+
+    private sealed class BlockLink
+    {
+        public string Bid { get; set; } = "";
+        public string Label { get; set; } = "";
     }
 
     // The editor document. Self-contained (HTML+CSS+JS) so there is no asset file to ship.
@@ -2110,6 +2162,12 @@ public sealed partial class MainWindow : Window
  #imgBar button svg{width:17px;height:17px;display:block;stroke:currentColor;stroke-width:1.7;fill:none;
    stroke-linecap:round;stroke-linejoin:round;}
  #imgBar .sep{width:1px;height:20px;background:rgba(128,128,128,.28);margin:0 4px;flex:none;}
+ .blockflash{animation:blockflash 1.6s ease-out;}
+ @keyframes blockflash{0%{background:rgba(47,111,237,.28);}100%{background:transparent;}}
+ #edtoast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:10002;
+   background:rgba(28,28,28,.92);color:#fff;padding:8px 14px;border-radius:8px;font-size:13px;
+   box-shadow:0 3px 12px rgba(0,0,0,.35);opacity:0;transition:opacity .2s;pointer-events:none;}
+ #edtoast.show{opacity:1;}
  .imghdl{position:fixed;z-index:10000;display:none;width:12px;height:12px;border-radius:50%;background:#fff;
    border:2px solid #2f6fed;box-shadow:0 1px 4px rgba(0,0,0,.35);box-sizing:border-box;}
  #imgBadge{position:fixed;z-index:10002;display:none;background:#1f2430;color:#fff;font-size:12px;font-weight:600;
@@ -2309,6 +2367,21 @@ public sealed partial class MainWindow : Window
      document.execCommand('insertText',false,cd?cd.getData('text'):'');post({type:'pasted',text:autoTitle()});return;}
    // Paste a URL while text is selected -> turn the selection into a link.
    var _pt=cd?cd.getData('text'):'',_ps=getSelection();
+   // A "Copy link to this block" token -> insert the deep-link anchor (works in any note).
+   if(_pt&&_pt.indexOf('mnb-blocklink:')===0){
+     e.preventDefault();
+     var bp=_pt.split(':'),nid=parseInt(bp[1],10),bbid=bp[2]||'',blabel=bp.slice(3).join(':');
+     if(nid&&bbid){
+       var bl=document.createElement('a');bl.className='wl';bl.setAttribute('data-id',nid);
+       bl.setAttribute('data-bid',bbid);bl.href='#';bl.textContent=blabel||'link';
+       if(_ps.rangeCount){var rr=_ps.getRangeAt(0);rr.deleteContents();rr.insertNode(bl);
+         var sp=document.createTextNode(' ');bl.parentNode.insertBefore(sp,bl.nextSibling);
+         rr.setStartAfter(sp);rr.collapse(true);_ps.removeAllRanges();_ps.addRange(rr);}
+       else{ed.appendChild(bl);}
+       save();
+     }
+     return;
+   }
    if(/^\s*https?:\/\/\S+\s*$/i.test(_pt)&&_ps.rangeCount&&!_ps.isCollapsed){
      e.preventDefault();document.execCommand('createLink',false,_pt.trim());
      var la=_ps.anchorNode&&_ps.anchorNode.parentElement&&_ps.anchorNode.parentElement.closest('a');if(la)la.setAttribute('target','_blank');
@@ -2356,7 +2429,7 @@ public sealed partial class MainWindow : Window
    if(mn){e.preventDefault();openMathEditor(mn);return;}
    var a=e.target&&e.target.closest?e.target.closest('a'):null;
    if(a){e.preventDefault();
-     if(a.classList.contains('wl')){var id=parseInt(a.getAttribute('data-id'),10);if(id)post({type:'opennote',id:id});}
+     if(a.classList.contains('wl')){var id=parseInt(a.getAttribute('data-id'),10);if(id)post({type:'opennote',id:id,bid:a.getAttribute('data-bid')||''});}
      else if(a.getAttribute('href')&&a.getAttribute('href')!=='#'){post({type:'openurl',src:a.getAttribute('href')});}
      return;}
    if(e.target&&e.target.tagName==='IMG'){selectImg(e.target);return;}
@@ -2653,6 +2726,34 @@ public sealed partial class MainWindow : Window
    closeWl();save();
  }
  ed.addEventListener('input',function(){var c=wlContext();if(c)showWl(c);else closeWl();});
+ // ---- Block deep-links: a stable id per linked block, scroll-to + flash on arrival ----
+ function newBid(){return 'b_'+Math.random().toString(36).slice(2,9);}
+ function blockOf(node){
+   var el=node&&node.nodeType===3?node.parentElement:node;
+   if(!el||!ed.contains(el))return null;
+   var li=el.closest&&el.closest('li');if(li&&ed.contains(li))return li;
+   var cur=el;while(cur&&cur.parentElement&&cur.parentElement!==ed)cur=cur.parentElement;
+   return (cur&&cur.parentElement===ed)?cur:null;
+ }
+ function bidOf(el){if(!el)return null;var b=el.getAttribute('data-bid');if(!b){b=newBid();el.setAttribute('data-bid',b);save();}return b;}
+ ed.addEventListener('contextmenu',function(e){window.__ctxBlock=blockOf(e.target);});
+ // C# reads this after "Copy link to this block": tag the block + return {bid,label} (or null).
+ function blockLinkToken(){
+   var el=window.__ctxBlock;if(!el||!ed.contains(el))return null;
+   var b=bidOf(el);var t=(el.innerText||el.textContent||'').replace(/\s+/g,' ').trim().slice(0,40);
+   return {bid:b,label:t};
+ }
+ // Copied/duplicated blocks can carry the same data-bid; keep the first, re-id the rest.
+ function dedupeBids(){var seen={};Array.prototype.forEach.call(ed.querySelectorAll('[data-bid]'),function(el){
+   var b=el.getAttribute('data-bid');if(seen[b])el.setAttribute('data-bid',newBid());else seen[b]=1;});}
+ function edToast(msg){var t=document.getElementById('edtoast');if(!t){t=document.createElement('div');t.id='edtoast';document.body.appendChild(t);}
+   t.textContent=msg;t.classList.add('show');clearTimeout(t.__h);t.__h=setTimeout(function(){t.classList.remove('show');},2400);}
+ function jumpToBid(bid){
+   if(!bid)return false;
+   var el=null;try{el=ed.querySelector('[data-bid="'+(window.CSS&&CSS.escape?CSS.escape(bid):bid)+'"]');}catch(_){el=null;}
+   if(el){el.scrollIntoView({block:'center'});el.classList.remove('blockflash');void el.offsetWidth;el.classList.add('blockflash');return true;}
+   edToast('That linked spot no longer exists.');return false;
+ }
  // ---- Slash "/" command menu: type / at the start of a line to insert blocks ----
  var slashCmds=[
    {t:'Heading 1',d:'Big title',a:function(){exec('formatBlock','H1');}},
@@ -2714,6 +2815,7 @@ public sealed partial class MainWindow : Window
    try{findClose();}catch(e){}         // clear any find highlights from the previous note
    ed.innerHTML=html||'';
    try{renderMathIn(ed);}catch(e){}    // render any LaTeX in the loaded note
+   try{dedupeBids();}catch(e){}        // keep block deep-link ids unique after copy/paste
    try{uInit();}catch(e){}             // reset undo history for the newly loaded note
    setTimeout(countWC,0);
    ed.spellcheck=!!o.spell;
