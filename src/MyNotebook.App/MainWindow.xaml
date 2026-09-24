@@ -236,7 +236,7 @@
                     </ListView.ItemContainerStyle>
                     <ListView.ItemTemplate>
                         <DataTemplate x:DataType="local:NoteListRow">
-                            <Grid ColumnSpacing="10">
+                            <Grid ColumnSpacing="10" Margin="{x:Bind Indent}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />

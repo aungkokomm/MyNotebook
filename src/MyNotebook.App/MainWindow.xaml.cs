@@ -451,16 +451,31 @@ public sealed partial class MainWindow : Window
         // The OrderByDescending(pinned) above also pulls non-pinned together; reassert pin-first.
         if (!trash) ordered = ordered.OrderByDescending(n => n.Pinned).ToList();
 
+        // Group subpages directly under their parent (one level), keeping the chosen sort otherwise.
+        // A subpage whose parent isn't in this view renders as a normal top-level row.
+        var present = ordered.Select(n => n.Id).ToHashSet();
+        var childrenByParent = ordered
+            .Where(n => n.ParentNoteId is long p && present.Contains(p))
+            .GroupBy(n => n.ParentNoteId!.Value)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
         _noteRows.Clear();
-        foreach (var n in ordered)
+        void AddRow(Note n, bool sub)
         {
             var t = EffectiveTitle(n);
             _noteRows.Add(new NoteListRow
             {
-                Id = n.Id, Type = n.Type, Pinned = n.Pinned && !trash,
+                Id = n.Id, Type = n.Type, Pinned = n.Pinned && !trash, IsSubpage = sub,
                 Title = string.IsNullOrEmpty(t) ? "(untitled)" : t,
                 Subtitle = NoteSubtitle(n),
             });
+        }
+        foreach (var n in ordered)
+        {
+            if (n.ParentNoteId is long pp && present.Contains(pp)) continue;   // shown under its parent
+            AddRow(n, false);
+            if (childrenByParent.TryGetValue(n.Id, out var kids))
+                foreach (var k in kids) AddRow(k, true);
         }
 
         NoteListTitle.Text = _filterTitle;
@@ -770,10 +785,41 @@ public sealed partial class MainWindow : Window
         }
         var note = _notes.GetNote(id);
         bool pinned = note?.Pinned ?? false;
+        bool isSub = note?.ParentNoteId != null;
         AddItem(menu, "Open", () => ShowNote(id));
-        AddItem(menu, pinned ? "Unpin" : "Pin", () => { _notes.SetPinned(id, !pinned); PopulateNoteList(); });
+        // Subpages don't pin (pinning would tear them away from their parent).
+        if (!isSub)
+            AddItem(menu, pinned ? "Unpin" : "Pin", () => { _notes.SetPinned(id, !pinned); PopulateNoteList(); });
         AddItem(menu, "Rename", () => _ = RenameNotePrompt(id));
         AddItem(menu, "Duplicate", () => DuplicateNote(id));
+
+        // Subpages (one level).
+        if (isSub)
+        {
+            AddItem(menu, "Promote to page", () => { _notes.SetNoteParent(id, null); PopulateNoteList(); });
+        }
+        else
+        {
+            AddItem(menu, "New subpage", () => CreateSubpageOf(id));
+            if (!_notes.HasSubpages(id))
+            {
+                var candidates = _notes.ListNotes(notebookId: _currentNotebookId)
+                    .Where(n => n.Id != id && n.ParentNoteId is null && n.Type == NoteType.Note).ToList();
+                if (candidates.Count > 0)
+                {
+                    var sub = new MenuFlyoutSubItem { Text = "Make subpage of" };
+                    foreach (var cand in candidates)
+                    {
+                        var pid = cand.Id;
+                        var mi = new MenuFlyoutItem { Text = EffectiveTitle(cand) is { Length: > 0 } t ? t : "(untitled)" };
+                        mi.Click += (_, _) => { _notes.SetNoteParent(id, pid); PopulateNoteList(); };
+                        sub.Items.Add(mi);
+                    }
+                    menu.Items.Add(sub);
+                }
+            }
+        }
+
         var moveTo = new MenuFlyoutSubItem { Text = "Move to" };
         var unfiled = new MenuFlyoutItem { Text = "Unfiled" };
         unfiled.Click += (_, _) => MoveNote(id, null);
@@ -797,6 +843,13 @@ public sealed partial class MainWindow : Window
         menu.Items.Add(new MenuFlyoutSeparator());
         AddItem(menu, "Delete", () => _ = DeleteNotePrompt(id, NoteTitleOf(id)));
         return menu;
+    }
+
+    private void CreateSubpageOf(long parentId)
+    {
+        var note = _notes.CreateNote("New note", NoteType.Note, null, _currentNotebookId, parentId);
+        PopulateNoteList();
+        ShowNote(note.Id);
     }
 
     /// <summary>Make a copy of a note (its own image files, so deleting one never breaks the other).</summary>

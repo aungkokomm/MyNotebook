@@ -94,7 +94,13 @@ public interface INoteService
     void MoveNoteToFolder(long noteId, long? folderId, long? notebookId = null);
 
     // Notes
-    Note CreateNote(string title, NoteType type = NoteType.Note, long? folderId = null, long? notebookId = null);
+    Note CreateNote(string title, NoteType type = NoteType.Note, long? folderId = null,
+                    long? notebookId = null, long? parentNoteId = null);
+    /// <summary>Make a note a subpage of parentId, or promote to a top-level page (parentId=null).
+    /// One level only; a no-op if it would nest deeper.</summary>
+    void SetNoteParent(long noteId, long? parentId);
+    /// <summary>True when the note has at least one (non-deleted) subpage.</summary>
+    bool HasSubpages(long noteId);
     Note? GetNote(long id);
     void UpdateNote(Note note);
     void SetPinned(long noteId, bool pinned);

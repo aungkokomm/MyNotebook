@@ -12,7 +12,7 @@ namespace MyNotebook.Core.Services;
 /// </summary>
 public sealed class StorageService : IStorageService
 {
-    private const int TargetVersion = 6;
+    private const int TargetVersion = 7;
     private const int KeepBackups = 10;
     private readonly string _connectionString;
     private readonly IPathService _paths;
@@ -315,6 +315,7 @@ public sealed class StorageService : IStorageService
         if (current < 4) Run(con, tx, "004_timeline_index.sql");
         if (current < 5) Run(con, tx, "005_notebooks.sql");
         if (current < 6) Run(con, tx, "006_folder_color.sql");
+        if (current < 7) Run(con, tx, "007_note_subpages.sql");
         tx.Commit();
     }
 

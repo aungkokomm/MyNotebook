@@ -30,6 +30,8 @@
                       Link="Migrations\005_notebooks.sql" />
     <EmbeddedResource Include="..\..\db\migrations\006_folder_color.sql"
                       Link="Migrations\006_folder_color.sql" />
+    <EmbeddedResource Include="..\..\db\migrations\007_note_subpages.sql"
+                      Link="Migrations\007_note_subpages.sql" />
   </ItemGroup>
 
 </Project>

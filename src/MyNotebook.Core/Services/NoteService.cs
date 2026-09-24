@@ -184,21 +184,38 @@ public sealed class NoteService : INoteService
     public void MoveNoteToFolder(long noteId, long? folderId, long? notebookId = null)
     {
         using var con = _storage.OpenConnection();
-        using var cmd = con.CreateCommand();
-        // When a target folder is given, re-home the note into that folder's notebook so the two
-        // never disagree; an explicit notebookId (moving to Unfiled in a notebook) wins if provided.
-        cmd.CommandText = notebookId.HasValue
-            ? "UPDATE Notes SET folder_id=$f, notebook_id=$nb, updated_at=$u WHERE id=$id"
-            : folderId.HasValue
-                ? @"UPDATE Notes SET folder_id=$f,
-                        notebook_id=COALESCE((SELECT notebook_id FROM Folders WHERE id=$f), notebook_id),
-                        updated_at=$u WHERE id=$id"
-                : "UPDATE Notes SET folder_id=$f, updated_at=$u WHERE id=$id";
-        cmd.Parameters.AddWithValue("$f", (object?)folderId ?? DBNull.Value);
-        if (notebookId.HasValue) cmd.Parameters.AddWithValue("$nb", notebookId.Value);
-        cmd.Parameters.AddWithValue("$u", Now());
-        cmd.Parameters.AddWithValue("$id", noteId);
-        cmd.ExecuteNonQuery();
+        using var tx = con.BeginTransaction();
+        // Moving a note to a folder detaches it from any parent (a subpage becomes a top-level page).
+        // A top-level note's own subpages then follow it into the same folder + notebook.
+        using (var cmd = con.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = notebookId.HasValue
+                ? "UPDATE Notes SET folder_id=$f, notebook_id=$nb, parent_note_id=NULL, updated_at=$u WHERE id=$id"
+                : folderId.HasValue
+                    ? @"UPDATE Notes SET folder_id=$f,
+                            notebook_id=COALESCE((SELECT notebook_id FROM Folders WHERE id=$f), notebook_id),
+                            parent_note_id=NULL, updated_at=$u WHERE id=$id"
+                    : "UPDATE Notes SET folder_id=$f, parent_note_id=NULL, updated_at=$u WHERE id=$id";
+            cmd.Parameters.AddWithValue("$f", (object?)folderId ?? DBNull.Value);
+            if (notebookId.HasValue) cmd.Parameters.AddWithValue("$nb", notebookId.Value);
+            cmd.Parameters.AddWithValue("$u", Now());
+            cmd.Parameters.AddWithValue("$id", noteId);
+            cmd.ExecuteNonQuery();
+        }
+        using (var cmd = con.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = @"UPDATE Notes
+                SET folder_id=(SELECT folder_id FROM Notes WHERE id=$id),
+                    notebook_id=(SELECT notebook_id FROM Notes WHERE id=$id),
+                    updated_at=$u
+                WHERE parent_note_id=$id";
+            cmd.Parameters.AddWithValue("$u", Now());
+            cmd.Parameters.AddWithValue("$id", noteId);
+            cmd.ExecuteNonQuery();
+        }
+        tx.Commit();
     }
 
     public IReadOnlyList<Folder> ListFolders(long? notebookId = null)
@@ -232,7 +249,8 @@ public sealed class NoteService : INoteService
     }
 
     // ------------------------------------------------------------------ Notes
-    public Note CreateNote(string title, NoteType type = NoteType.Note, long? folderId = null, long? notebookId = null)
+    public Note CreateNote(string title, NoteType type = NoteType.Note, long? folderId = null,
+                           long? notebookId = null, long? parentNoteId = null)
     {
         var n = new Note
         {
@@ -240,21 +258,27 @@ public sealed class NoteService : INoteService
             Type = type,
             FolderId = folderId,
             NotebookId = notebookId,
+            ParentNoteId = parentNoteId,
             CreatedAt = Now(),
             UpdatedAt = Now(),
         };
         using var con = _storage.OpenConnection();
         using var cmd = con.CreateCommand();
-        // If a folder is given, inherit its notebook; else use the notebook passed in (or the first one).
-        cmd.CommandText = @"INSERT INTO Notes(guid,folder_id,notebook_id,title,body_rtf,body_plain,note_type,
+        // A subpage inherits its parent's folder + notebook. Otherwise: folder's notebook, else the
+        // passed notebook, else the first notebook.
+        cmd.CommandText = @"INSERT INTO Notes(guid,folder_id,notebook_id,parent_note_id,title,body_rtf,body_plain,note_type,
                               pinned,sort_order,created_at,updated_at,deleted)
-                            VALUES($g,$f,
-                              COALESCE((SELECT notebook_id FROM Folders WHERE id=$f), $nb,
+                            VALUES($g,
+                              COALESCE((SELECT folder_id FROM Notes WHERE id=$parent), $f),
+                              COALESCE((SELECT notebook_id FROM Notes WHERE id=$parent),
+                                       (SELECT notebook_id FROM Folders WHERE id=$f), $nb,
                                        (SELECT id FROM Notebooks WHERE deleted=0 ORDER BY sort_order, id LIMIT 1)),
+                              $parent,
                               $t,'','',$ty,0,0,$c,$u,0); SELECT last_insert_rowid();";
         cmd.Parameters.AddWithValue("$g", n.Guid);
         cmd.Parameters.AddWithValue("$f", (object?)n.FolderId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$nb", (object?)n.NotebookId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$parent", (object?)n.ParentNoteId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$t", n.Title);
         cmd.Parameters.AddWithValue("$ty", n.Type.ToDbValue());
         cmd.Parameters.AddWithValue("$c", n.CreatedAt);
@@ -263,12 +287,56 @@ public sealed class NoteService : INoteService
         return n;
     }
 
+    /// <summary>Make a note a subpage of a parent, or promote it to a top-level page (parentId=null).
+    /// Enforces one level: a page that has subpages can't become a subpage, and the parent can't be
+    /// a subpage itself. A subpage adopts its parent's folder + notebook.</summary>
+    public void SetNoteParent(long noteId, long? parentId)
+    {
+        if (parentId == noteId) return;
+        using var con = _storage.OpenConnection();
+        if (parentId is long pid)
+        {
+            using var guard = con.CreateCommand();
+            // col 0: parent's own parent (must be null); col 1: whether this note already has subpages.
+            guard.CommandText = @"SELECT
+                  (SELECT parent_note_id FROM Notes WHERE id=$p),
+                  (SELECT COUNT(*) FROM Notes WHERE parent_note_id=$id AND deleted=0)";
+            guard.Parameters.AddWithValue("$p", pid);
+            guard.Parameters.AddWithValue("$id", noteId);
+            using var r = guard.ExecuteReader();
+            r.Read();
+            bool parentIsSubpage = !r.IsDBNull(0);
+            bool hasChildren = r.GetInt64(1) > 0;
+            if (parentIsSubpage || hasChildren) return;   // would exceed one level — refuse
+        }
+        using var cmd = con.CreateCommand();
+        cmd.CommandText = parentId is null
+            ? "UPDATE Notes SET parent_note_id=NULL, updated_at=$u WHERE id=$id"
+            : @"UPDATE Notes SET parent_note_id=$p,
+                    folder_id=(SELECT folder_id FROM Notes WHERE id=$p),
+                    notebook_id=(SELECT notebook_id FROM Notes WHERE id=$p),
+                    updated_at=$u WHERE id=$id";
+        if (parentId is long p2) cmd.Parameters.AddWithValue("$p", p2);
+        cmd.Parameters.AddWithValue("$u", Now());
+        cmd.Parameters.AddWithValue("$id", noteId);
+        cmd.ExecuteNonQuery();
+    }
+
+    public bool HasSubpages(long noteId)
+    {
+        using var con = _storage.OpenConnection();
+        using var cmd = con.CreateCommand();
+        cmd.CommandText = "SELECT EXISTS(SELECT 1 FROM Notes WHERE parent_note_id=$id AND deleted=0)";
+        cmd.Parameters.AddWithValue("$id", noteId);
+        return Convert.ToInt64(cmd.ExecuteScalar()) != 0;
+    }
+
     public Note? GetNote(long id)
     {
         using var con = _storage.OpenConnection();
         using var cmd = con.CreateCommand();
         cmd.CommandText = @"SELECT id,guid,folder_id,notebook_id,title,body_rtf,body_plain,note_type,
-                                   pinned,sort_order,created_at,updated_at,deleted
+                                   pinned,sort_order,created_at,updated_at,deleted,parent_note_id
                             FROM Notes WHERE id=$id";
         cmd.Parameters.AddWithValue("$id", id);
         using var r = cmd.ExecuteReader();
@@ -330,7 +398,8 @@ public sealed class NoteService : INoteService
     {
         using var con = _storage.OpenConnection();
         using var cmd = con.CreateCommand();
-        cmd.CommandText = "UPDATE Notes SET deleted=1, updated_at=$u WHERE id=$id";
+        // Deleting a page also sends its subpages to the trash (they travel as a group).
+        cmd.CommandText = "UPDATE Notes SET deleted=1, updated_at=$u WHERE id=$id OR parent_note_id=$id";
         cmd.Parameters.AddWithValue("$u", Now());
         cmd.Parameters.AddWithValue("$id", noteId);
         cmd.ExecuteNonQuery();
@@ -341,7 +410,7 @@ public sealed class NoteService : INoteService
         using var con = _storage.OpenConnection();
         using var cmd = con.CreateCommand();
         var sb = new StringBuilder(@"SELECT id,guid,folder_id,notebook_id,title,body_rtf,body_plain,note_type,
-                                            pinned,sort_order,created_at,updated_at,deleted
+                                            pinned,sort_order,created_at,updated_at,deleted,parent_note_id
                                      FROM Notes WHERE 1=1");
         if (!includeDeleted) sb.Append(" AND deleted=0");
         if (folderId.HasValue) { sb.Append(" AND folder_id=$f"); cmd.Parameters.AddWithValue("$f", folderId.Value); }
@@ -361,7 +430,7 @@ public sealed class NoteService : INoteService
         using var con = _storage.OpenConnection();
         using var cmd = con.CreateCommand();
         cmd.CommandText = $@"SELECT id,guid,folder_id,notebook_id,title,body_rtf,body_plain,note_type,
-                                    pinned,sort_order,created_at,updated_at,deleted
+                                    pinned,sort_order,created_at,updated_at,deleted,parent_note_id
                              FROM Notes WHERE deleted=0 ORDER BY {col} DESC";
         using var r = cmd.ExecuteReader();
         var list = new List<Note>();
@@ -603,7 +672,7 @@ public sealed class NoteService : INoteService
         using var con = _storage.OpenConnection();
         using var cmd = con.CreateCommand();
         cmd.CommandText = @"SELECT n.id,n.guid,n.folder_id,n.notebook_id,n.title,n.body_rtf,n.body_plain,n.note_type,
-                                   n.pinned,n.sort_order,n.created_at,n.updated_at,n.deleted
+                                   n.pinned,n.sort_order,n.created_at,n.updated_at,n.deleted,n.parent_note_id
                             FROM Notes n JOIN NoteTags nt ON nt.note_id=n.id
                             WHERE nt.tag_id=$t AND n.deleted=0
                             ORDER BY n.pinned DESC, n.updated_at DESC";
@@ -891,7 +960,7 @@ public sealed class NoteService : INoteService
         using var con = _storage.OpenConnection();
         using var cmd = con.CreateCommand();
         cmd.CommandText = @"SELECT id,guid,folder_id,notebook_id,title,body_rtf,body_plain,note_type,
-                                   pinned,sort_order,created_at,updated_at,deleted
+                                   pinned,sort_order,created_at,updated_at,deleted,parent_note_id
                             FROM Notes WHERE deleted=1 ORDER BY updated_at DESC";
         using var r = cmd.ExecuteReader();
         var list = new List<Note>();
@@ -903,8 +972,14 @@ public sealed class NoteService : INoteService
     {
         using var con = _storage.OpenConnection();
         using var cmd = con.CreateCommand();
-        // deleted=0 fires the FTS re-index trigger automatically.
-        cmd.CommandText = "UPDATE Notes SET deleted=0, updated_at=$u WHERE id=$id";
+        // deleted=0 fires the FTS re-index trigger automatically. If this was a subpage whose parent
+        // is gone or still deleted, promote it to a top-level page so it isn't orphaned/hidden.
+        cmd.CommandText = @"UPDATE Notes SET deleted=0, updated_at=$u,
+            parent_note_id=CASE
+                WHEN parent_note_id IS NOT NULL
+                     AND (SELECT deleted FROM Notes p WHERE p.id=Notes.parent_note_id) IS NOT 0
+                THEN NULL ELSE parent_note_id END
+            WHERE id=$id";
         cmd.Parameters.AddWithValue("$u", Now());
         cmd.Parameters.AddWithValue("$id", noteId);
         cmd.ExecuteNonQuery();
@@ -983,9 +1058,9 @@ public sealed class NoteService : INoteService
 
     // Column order (shared by every note SELECT below):
     // 0 id, 1 guid, 2 folder_id, 3 notebook_id, 4 title, 5 body_rtf, 6 body_plain,
-    // 7 note_type, 8 pinned, 9 sort_order, 10 created_at, 11 updated_at, 12 deleted
+    // 7 note_type, 8 pinned, 9 sort_order, 10 created_at, 11 updated_at, 12 deleted, 13 parent_note_id
     private const string NoteCols =
-        "id,guid,folder_id,notebook_id,title,body_rtf,body_plain,note_type,pinned,sort_order,created_at,updated_at,deleted";
+        "id,guid,folder_id,notebook_id,title,body_rtf,body_plain,note_type,pinned,sort_order,created_at,updated_at,deleted,parent_note_id";
 
     private static Note ReadNote(SqliteDataReader r) => new()
     {
@@ -1002,6 +1077,7 @@ public sealed class NoteService : INoteService
         CreatedAt = r.GetInt64(10),
         UpdatedAt = r.GetInt64(11),
         Deleted = r.GetInt64(12) != 0,
+        ParentNoteId = r.IsDBNull(13) ? null : r.GetInt64(13),
     };
 }
 

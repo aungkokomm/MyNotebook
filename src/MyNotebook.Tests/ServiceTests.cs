@@ -36,7 +36,7 @@ public class SchemaTests
     public void Initialize_sets_schema_version_to_current()
     {
         using var fx = new NotebookFixture();
-        Assert.Equal(6, fx.Storage.SchemaVersion);
+        Assert.Equal(7, fx.Storage.SchemaVersion);
     }
 
     [Fact]
@@ -44,7 +44,7 @@ public class SchemaTests
     {
         using var fx = new NotebookFixture();
         fx.Storage.Initialize(); // second call must not throw or duplicate
-        Assert.Equal(6, fx.Storage.SchemaVersion);
+        Assert.Equal(7, fx.Storage.SchemaVersion);
     }
 
     [Fact]
@@ -127,6 +127,86 @@ public class NotebookTests
         // ListNotes orders by pinned, then sort_order — so the manual order shows through.
         var ids = fx.Notes.ListNotes().Select(n => n.Id).ToList();
         Assert.Equal(new[] { c.Id, a.Id, b.Id }, ids);
+    }
+}
+
+public class SubpageTests
+{
+    [Fact]
+    public void Subpage_inherits_parent_folder_and_notebook()
+    {
+        using var fx = new NotebookFixture();
+        var nb = fx.Notes.CreateNotebook("Chemistry");
+        var folder = fx.Notes.CreateFolder("Acids", notebookId: nb.Id);
+        var parent = fx.Notes.CreateNote("Parent", NoteType.Note, folder.Id, nb.Id);
+        var child = fx.Notes.CreateNote("Child", NoteType.Note, null, null, parent.Id);
+
+        var c = fx.Notes.GetNote(child.Id)!;
+        Assert.Equal(parent.Id, c.ParentNoteId);
+        Assert.Equal(folder.Id, c.FolderId);
+        Assert.Equal(nb.Id, c.NotebookId);
+    }
+
+    [Fact]
+    public void SetNoteParent_enforces_one_level()
+    {
+        using var fx = new NotebookFixture();
+        var a = fx.Notes.CreateNote("A");
+        var b = fx.Notes.CreateNote("B");
+        var c = fx.Notes.CreateNote("C");
+
+        fx.Notes.SetNoteParent(b.Id, a.Id);            // b becomes a subpage of a
+        fx.Notes.SetNoteParent(c.Id, b.Id);            // refused: b is already a subpage
+        Assert.Null(fx.Notes.GetNote(c.Id)!.ParentNoteId);
+        fx.Notes.SetNoteParent(a.Id, c.Id);            // refused: a has a subpage of its own
+        Assert.Null(fx.Notes.GetNote(a.Id)!.ParentNoteId);
+    }
+
+    [Fact]
+    public void Deleting_a_parent_trashes_its_subpages()
+    {
+        using var fx = new NotebookFixture();
+        var p = fx.Notes.CreateNote("P");
+        var s = fx.Notes.CreateNote("S", NoteType.Note, null, null, p.Id);
+
+        fx.Notes.SoftDeleteNote(p.Id);
+
+        Assert.True(fx.Notes.GetNote(s.Id)!.Deleted);
+        Assert.Contains(fx.Notes.ListTrash(), n => n.Id == s.Id);
+    }
+
+    [Fact]
+    public void Moving_a_parent_moves_subpages_and_moving_a_subpage_promotes_it()
+    {
+        using var fx = new NotebookFixture();
+        var f1 = fx.Notes.CreateFolder("F1");
+        var f2 = fx.Notes.CreateFolder("F2");
+        var p = fx.Notes.CreateNote("P", NoteType.Note, f1.Id);
+        var s = fx.Notes.CreateNote("S", NoteType.Note, null, null, p.Id);
+
+        fx.Notes.MoveNoteToFolder(p.Id, f2.Id);        // parent moves; child follows
+        Assert.Equal(f2.Id, fx.Notes.GetNote(s.Id)!.FolderId);
+        Assert.Equal(p.Id, fx.Notes.GetNote(s.Id)!.ParentNoteId);
+
+        fx.Notes.MoveNoteToFolder(s.Id, f1.Id);        // subpage moves out -> promoted
+        var s2 = fx.Notes.GetNote(s.Id)!;
+        Assert.Null(s2.ParentNoteId);
+        Assert.Equal(f1.Id, s2.FolderId);
+    }
+
+    [Fact]
+    public void Restoring_an_orphaned_subpage_promotes_it()
+    {
+        using var fx = new NotebookFixture();
+        var p = fx.Notes.CreateNote("P");
+        var s = fx.Notes.CreateNote("S", NoteType.Note, null, null, p.Id);
+
+        fx.Notes.SoftDeleteNote(p.Id);                 // both go to trash
+        fx.Notes.RestoreNote(s.Id);                    // restore only the subpage
+
+        var s2 = fx.Notes.GetNote(s.Id)!;
+        Assert.False(s2.Deleted);
+        Assert.Null(s2.ParentNoteId);                  // parent still deleted -> promoted
     }
 }
 

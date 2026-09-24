@@ -19,6 +19,10 @@ public sealed class NoteListRow : INotifyPropertyChanged
     private string _subtitle = "";
     public string Subtitle { get => _subtitle; set { if (_subtitle == value) return; _subtitle = value; Raise(nameof(Subtitle)); } }
 
+    /// <summary>True when this row is a subpage; indents it under its parent.</summary>
+    public bool IsSubpage { get; init; }
+    public Microsoft.UI.Xaml.Thickness Indent => new(IsSubpage ? 22 : 0, 0, 0, 0);
+
     // Segoe Fluent glyphs: Pictures (thread) / Page (note).
     public string Glyph => Type == NoteType.Thread ? "\uE8B9" : "\uE7C3";
     public Visibility PinVisibility => Pinned ? Visibility.Visible : Visibility.Collapsed;

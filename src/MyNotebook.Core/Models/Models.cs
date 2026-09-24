@@ -60,6 +60,8 @@ public sealed class Note
     public long? FolderId { get; set; }
     /// <summary>Which notebook this note belongs to (independent of folder, so unfiled notes still have a home).</summary>
     public long? NotebookId { get; set; }
+    /// <summary>Parent page when this note is a subpage (one level only); null for a top-level page.</summary>
+    public long? ParentNoteId { get; set; }
     public string Title { get; set; } = "";
     /// <summary>RichEditBox RTF — source of truth for formatting.</summary>
     public string BodyRtf { get; set; } = "";
