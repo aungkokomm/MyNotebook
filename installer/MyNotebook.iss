@@ -4,7 +4,7 @@
 ; run in PORTABLE mode (the app writes its Data\ folder next to the exe).
 
 #define MyAppName "My Notebook"
-#define MyAppVersion "2.5.0"
+#define MyAppVersion "2.6.0"
 #define MyAppPublisher "Aung Ko Ko"
 #define MyAppExeName "MyNotebook.App.exe"
 
@@ -37,6 +37,9 @@ UsePreviousAppDir=yes
 DisableDirPage=no
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
+; Replace the uninstall log instead of appending to it: up to 1.7.1 the log held a step
+; that deleted the whole {app} folder (Data included), and an appended log keeps running it.
+UninstallLogMode=overwrite
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 
@@ -55,6 +58,11 @@ Source: "{#SourcePath}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 ; uninsneveruninstall => the user's notes DB + images are kept when the app is uninstalled.
 Source: "{#SeedDb}";      DestDir: "{app}\Data";                      DestName: "notebook.db"; Flags: onlyifdoesntexist uninsneveruninstall
 Source: "{#SampleData}\*"; DestDir: "{app}\Data\attachments";         Flags: onlyifdoesntexist recursesubdirs createallsubdirs uninsneveruninstall
+
+[InstallDelete]
+; Up to 2.5.0 the app's resources were in resources.pri; since 2.6.0 they are in
+; MyNotebook.App.pri. A leftover resources.pri is read first, so remove it on upgrade.
+Type: files; Name: "{app}\resources.pri"
 
 [Icons]
 Name: "{group}\{#MyAppName}";            Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"

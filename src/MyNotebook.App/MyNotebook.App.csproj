@@ -5,10 +5,10 @@
     <!-- Matches the known-good config of the PocketReader WinUI app on this machine.
          TFM 19041 (not 22621): Mica still applies at runtime on Win11; the SDK
          projection version is unrelated to the backdrop. -->
-    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>MyNotebook.App</RootNamespace>
-    <Version>2.5.0</Version>
+    <Version>2.6.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
     <Platforms>x64</Platforms>
@@ -31,15 +31,19 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- 1.6.241114003 is the exact WinAppSDK build proven to run on this machine
-         (PocketReader). Newer servicing builds / 1.7 failed to bootstrap here. -->
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.241114003" />
-    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+    <!-- 2.5.1 + net10: the combination proven on this machine by Aryan, CineLibrary
+         and PocketReader (2026-09). WinAppSDK 1.6 is out of support. -->
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2705" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
     <PackageReference Include="QuestPDF" Version="2026.6.0" />
     <PackageReference Include="PdfSharp" Version="6.1.1" />
-    <PackageReference Include="DocumentFormat.OpenXml" Version="3.1.0" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
     <PackageReference Include="HtmlToOpenXml.dll" Version="3.1.0" />
+    <!-- Pinned above HtmlToOpenXml's own 1.1.0 for the mXSS fix (GHSA-pgww-w46g-26qg).
+         HtmlToOpenXml 3.5 would bring it too, but it drops spaces between inline
+         elements in exported .docx (checked on 48 real notes), so it stays at 3.1.0. -->
+    <PackageReference Include="AngleSharp" Version="1.5.2" />
   </ItemGroup>
 
   <ItemGroup>

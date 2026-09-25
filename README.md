@@ -9,7 +9,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6" alt="Windows 10/11">
-  <img src="https://img.shields.io/badge/.NET-8.0-512BD4" alt=".NET 8">
+  <img src="https://img.shields.io/badge/.NET-10.0-512BD4" alt=".NET 10">
   <img src="https://img.shields.io/badge/UI-WinUI%203-5C2D91" alt="WinUI 3">
   <a href="../../releases"><img src="https://img.shields.io/github/v/release/aungkokomm/MyNotebook?label=download" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
@@ -147,7 +147,7 @@ The app shows a clear in-app reminder of this, and keeps **rolling local backups
 
 ## 🛠️ Tech
 
-**C# / .NET 8** · **WinUI 3** (Windows App SDK, self-contained and unpackaged) · **SQLite + FTS5**
+**C# / .NET 10** · **WinUI 3** (Windows App SDK, self-contained and unpackaged) · **SQLite + FTS5**
 with a trigram index · **WebView2** editor · **KaTeX** (offline math) · `Windows.Media.Ocr` ·
 QuestPDF / PdfSharp (PDF) and OpenXML (`.docx`). Core logic lives in `MyNotebook.Core` (no WinUI
 dependency) and is covered by xUnit tests.
@@ -158,7 +158,7 @@ MyNotebook/
 ├─ db/seed/           self-verifying seed-DB builder (sample notes + screenshots)
 ├─ installer/         Inno Setup script (portable, lowest-privilege)
 ├─ src/
-│  ├─ MyNotebook.Core/   net8.0: models, services, SQLite, search (unit-tested)
+│  ├─ MyNotebook.Core/   net10.0: models, services, SQLite, search (unit-tested)
 │  ├─ MyNotebook.App/    WinUI 3: UI, editor, OCR, export
 │  └─ MyNotebook.Tests/  xUnit: services, search, versioning, backup/restore
 └─ screenshots/
@@ -166,12 +166,12 @@ MyNotebook/
 
 ## 🏗️ Build from source
 
-Requires **Windows 10/11 x64** and the **.NET 8 SDK**. Build the WinUI app with **Visual Studio
+Requires **Windows 10/11 x64** and the **.NET 10 SDK**. Build the WinUI app with **Visual Studio
 MSBuild**, not `dotnet build`, because the .NET CLI MSBuild lacks the WinUI PRI-packaging task
 (`MSB4062`).
 
 ```powershell
-# Run the Core tests (works anywhere with .NET 8)
+# Run the Core tests (works anywhere with .NET 10)
 dotnet test src/MyNotebook.Tests/MyNotebook.Tests.csproj
 
 # Build & publish the portable, self-contained app (Windows)
