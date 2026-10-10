@@ -30,7 +30,7 @@ Head to the [**Releases**](../../releases) page and run the latest
 `MyNotebook_Setup_vX.Y.Z.exe`. It installs **without admin rights**, runs **portable**, and
 **never touches your data** on upgrade. First launch even comes with a few sample notes.
 
-> 📖 **New here, or not sure how a feature works? Read the [User Guide](docs/USER_GUIDE.md)** — a
+> 📖 **New here, or not sure how a feature works? Read the [User Guide](docs/USER_GUIDE.md)** - a
 > plain-language, task-by-task walkthrough of everything the app does.
 
 ## 🤔 Why another note app?
@@ -212,3 +212,7 @@ Released under the [MIT License](LICENSE).
 ---
 
 <p align="center"><sub>Built for Windows 10 and 11 · local-first · made for notes that stay yours.</sub></p>
+
+---
+
+<p align="center"><sub>© 2026 Aung Ko Ko · <a href="https://aungkokomm.github.io/">more of my apps</a></sub></p>
